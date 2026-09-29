@@ -1,12 +1,26 @@
 # Инженерный журнал разработки (devblog/)
 
-В этом каталоге фиксируются отчеты по завершении каждой фазы и ключевой подфазы разработки.
+В этом каталоге фиксируются отчеты по завершении каждой фазы и ключевой подфазы разработки.  
+Девблог ведётся живым языком разработчиков — с описанием хода мыслей, реальных инженерных челленджей, метрик и чеклистов готовности.
 
-## Структура отчетов
-Каждый отчет оформляется отдельным файлом по шаблону:
-`devblog/phase_XX_name.md` или `devblog/NN_description.md`.
+---
 
-### Обязательные разделы отчета:
+## 🧭 Навигатор по фазам проекта
+
+| Фаза | Название | Статус | Отчёт в девблоге | Ключевые результаты |
+| :--- | :--- | :---: | :--- | :--- |
+| **Фаза 0** | Инициализация и правила | ✅ | [00_init_and_planning.md](file:///home/anhelm/Projects/Bridge_Local/devblog/00_init_and_planning.md) | Репозиторий, uv, pyproject.toml, AGENTS.md, SDLC_PLAN.md |
+| **Фаза 1** | Контракты и DTO | ✅ | [phase_01_contracts.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_01_contracts.md) | Pydantic V2 модели, TOML конфиг, 60 тестов |
+| **Фаза 2** | Базовое ядро (Bridge Core) | ✅ | [phase_02_core.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_02_core.md) | Длина-префикс протокол, TCP/TLS транспорт, Fail-Fast Heartbeat, JSONL логгер, 104 теста |
+| **Фаза 3** | Windows Agent & Служба | ✅ | [phase_03_win_agent.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_03_win_agent.md) | PowerShell Runner (UTF-8), Process Tree Killer, Windows Service Daemon, сквозная интеграция, 122 теста |
+| **Фаза 4** | «Карман» и «Записки» | ✅ | [phase_04_pocket_notes.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_04_pocket_notes.md) | Чанковая передача (64 КБ), сверка SHA-256, атомарная запись, Watchdog дебаунс, Notes JSONL, 146 тестов |
+| **Фаза 5** | Linux Client CLI & TUI | ⏳ *В очереди* | `phase_05_linux_cli.md` | Human CLI + Headless JSON для agy_cli + интерактивный TUI монитор |
+| **Фаза 6** | Отказоустойчивость | ⏳ *В очереди* | `phase_06_resilience.md` | Сон Windows, обрыв Wi-Fi, авто-докачка кармана, стресс-тесты |
+| **Фаза 7** | Релиз и дистрибуция | ⏳ *В очереди* | `phase_07_release.md` | PyInstaller standalone .exe, инсталлятор службы, чистая изоляция dev-логов |
+
+---
+
+## Структура каждого отчета
 1. **Цель фазы/подфазы:** Что планировалось реализовать.
 2. **Выполненные работы:** Перечень созданных модулей, функций, интерфейсов.
 3. **Логирование и трассировка (Dev-Mode):** Какие логгеры и точки контроля добавлены.
