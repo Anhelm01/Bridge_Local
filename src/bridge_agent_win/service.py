@@ -4,7 +4,11 @@ bridge_agent_win.service — Сервис-демон Windows Агента (Windo
 Реализует:
   - Фоновый серверный демон, работающий как системная служба Windows (до экрана логина).
   - Консольный режим (standalone runner) для локальной разработки, отладки и Mock-тестов.
-  - Регистрацию и обработку RPC методов (heartbeat.ping, exec.run).
+  - Регистрацию и обработку RPC методов:
+      * heartbeat.ping: проверка доступности и метрики системы.
+      * exec.run: запуск команд PowerShell с контролем кодировок и таймаутов.
+      * pocket.manifest / pocket.pull / pocket.push: движок синхронизации файлов «Карман».
+      * notes.send / notes.history / notes.mark_read: быстрая передача заметок «Записки».
   - Безусловное сквозное логирование КАЖДОГО запроса и ответа в pocket/logs/YYYY-MM-DD.jsonl.
   - Защиту по PSK-токену (HMAC) и сбор системных метрик узла (CPU, RAM, Uptime).
 """
@@ -12,6 +16,7 @@ bridge_agent_win.service — Сервис-демон Windows Агента (Windo
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import time
 from pathlib import Path
@@ -26,11 +31,20 @@ from bridge_core.models import (
     ExecRequestParams,
     NodeOS,
     NodeStatus,
+    NoteHistoryParams,
+    NoteMarkReadParams,
+    NoteSendParams,
+    PocketPullParams,
+    PocketPullResult,
+    PocketPushParams,
+    PocketPushResult,
     PongResult,
     RpcErrorCode,
     RpcMethod,
 )
-from bridge_core.security import PSKAuthenticator, create_server_ssl_context
+from bridge_core.notes import NotesManager
+from bridge_core.pocket import PocketManager
+from bridge_core.security import PathTraversalError, PSKAuthenticator, create_server_ssl_context
 from bridge_core.transport import AsyncTransportServer, RpcCallError
 
 logger = logging.getLogger(__name__)
@@ -71,10 +85,22 @@ class WindowsBridgeService:
         # Настраиваем логирование
         setup_logging(self.config.logging)
 
-        # Каталог для аудит-логов в кармане
+        # Каталог для кармана и аудит-логов
         pocket_dir = Path(self.config.pocket.path)
         logs_dir = pocket_dir / self.config.pocket.logs_subdir
         self.audit_logger = AtomicJsonlLogger(logs_dir=logs_dir, auto_fsync=True)
+
+        # Менеджер файлов кармана
+        self.pocket_manager = PocketManager(
+            pocket_dir=pocket_dir,
+            dev_logging=self.config.logging.dev_mode,
+        )
+
+        # Менеджер заметок
+        self.notes_manager = NotesManager(
+            pocket_dir=pocket_dir,
+            dev_logging=self.config.logging.dev_mode,
+        )
 
         # Исполнитель команд
         self.executor = PowerShellExecutor(
@@ -106,6 +132,12 @@ class WindowsBridgeService:
         # Регистрируем обработчики методов
         self.server.register_handler(RpcMethod.HEARTBEAT_PING, self._handle_ping)
         self.server.register_handler(RpcMethod.EXEC_RUN, self._handle_exec)
+        self.server.register_handler(RpcMethod.POCKET_MANIFEST, self._handle_pocket_manifest)
+        self.server.register_handler(RpcMethod.POCKET_PULL, self._handle_pocket_pull)
+        self.server.register_handler(RpcMethod.POCKET_PUSH, self._handle_pocket_push)
+        self.server.register_handler(RpcMethod.NOTES_SEND, self._handle_notes_send)
+        self.server.register_handler(RpcMethod.NOTES_HISTORY, self._handle_notes_history)
+        self.server.register_handler(RpcMethod.NOTES_MARK_READ, self._handle_notes_mark_read)
 
         logger.info(
             "[SERVICE-INIT] WindowsBridgeService инициализирован: node=%s, host=%s:%d, pocket=%s",
@@ -114,6 +146,48 @@ class WindowsBridgeService:
             self.config.connection.port,
             pocket_dir,
         )
+
+    # -----------------------------------------------------------------------
+    # Вспомогательные методы
+    # -----------------------------------------------------------------------
+
+    async def _verify_auth(
+        self,
+        params: dict[str, Any],
+        session_info: dict[str, Any],
+        method: str,
+    ) -> tuple[str, str]:
+        """Проверяет PSK аутентификацию и возвращает (session_id, client_ip)."""
+        req_id = session_info.get("session_id", "unknown")
+        peer = session_info.get("peername")
+        client_ip = peer[0] if (peer and isinstance(peer, (list, tuple))) else "127.0.0.1"
+
+        if self.authenticator:
+            try:
+                self.authenticator.verify_auth_params(params)
+            except Exception as e:
+                logger.warning(
+                    "[%s] Ошибка авторизации метода %s от %s: %s",
+                    req_id,
+                    method,
+                    client_ip,
+                    e,
+                )
+                audit_entry = AuditLogEntry(
+                    session_id=req_id,
+                    client_ip=client_ip,
+                    method=method,
+                    request_id=req_id,
+                    status=AuditStatus.ERROR,
+                    stderr_preview="Auth Failed",
+                )
+                await self.audit_logger.write(audit_entry)
+                raise RpcCallError(
+                    code=RpcErrorCode.AUTH_FAILED,
+                    message=f"Ошибка аутентификации: {e}",
+                ) from e
+
+        return req_id, client_ip
 
     # -----------------------------------------------------------------------
     # Обработчики RPC методов
@@ -138,53 +212,18 @@ class WindowsBridgeService:
     ) -> dict[str, Any]:
         """
         Обработка exec.run:
-          1. Проверка PSK аутентификации (если включена).
+          1. Проверка PSK аутентификации.
           2. Запуск команды через PowerShellExecutor.
           3. Атомарная запись строки в pocket/logs/YYYY-MM-DD.jsonl.
           4. Возврат результата клиенту.
         """
-        req_id = session_info.get("session_id", "unknown")
-        client_ip = (
-            session_info.get("peername", ("127.0.0.1", 0))[0]
-            if session_info.get("peername")
-            else "127.0.0.1"
-        )
-
-        # 1. Проверяем токен авторизации
-        if self.authenticator:
-            try:
-                self.authenticator.verify_auth_params(params)
-            except Exception as e:
-                logger.warning(
-                    "[%s] Ошибка авторизации команды от %s: %s",
-                    req_id,
-                    client_ip,
-                    e,
-                )
-                # Логируем отказ в доступе
-                audit_entry = AuditLogEntry(
-                    session_id=req_id,
-                    client_ip=client_ip,
-                    method=RpcMethod.EXEC_RUN,
-                    request_id=req_id,
-                    command=str(params.get("command", "")),
-                    status=AuditStatus.ERROR,
-                    stderr_preview="Auth Failed",
-                )
-                await self.audit_logger.write(audit_entry)
-                raise RpcCallError(
-                    code=RpcErrorCode.AUTH_FAILED,
-                    message=f"Ошибка аутентификации: {e}",
-                ) from e
-
+        req_id, client_ip = await self._verify_auth(params, session_info, RpcMethod.EXEC_RUN)
         exec_params = ExecRequestParams.model_validate(params)
         t0 = time.perf_counter_ns()
 
         try:
-            # 2. Выполняем команду
             result = await self.executor.execute(exec_params)
 
-            # 3. Фиксируем результат в аудит-лог кармана (.jsonl)
             audit_entry = AuditLogEntry(
                 session_id=req_id,
                 client_ip=client_ip,
@@ -204,7 +243,6 @@ class WindowsBridgeService:
             return result.model_dump()
 
         except RpcCallError as e:
-            # При таймауте или сбое — фиксируем в лог и пробрасываем клиенту
             duration_ms = int((time.perf_counter_ns() - t0) // 1_000_000)
             is_timeout = e.code == RpcErrorCode.COMMAND_TIMEOUT
 
@@ -222,6 +260,163 @@ class WindowsBridgeService:
             )
             await self.audit_logger.write(audit_entry)
             raise
+
+    # -----------------------------------------------------------------------
+    # Обработчики подсистемы «Карман» (Pocket Sync)
+    # -----------------------------------------------------------------------
+
+    async def _handle_pocket_manifest(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка pocket.manifest: возвращает полный манифест файлов кармана."""
+        req_id, client_ip = await self._verify_auth(params, session_info, RpcMethod.POCKET_MANIFEST)
+        manifest = self.pocket_manager.scan_manifest()
+
+        audit_entry = AuditLogEntry(
+            session_id=req_id,
+            client_ip=client_ip,
+            method=RpcMethod.POCKET_MANIFEST,
+            request_id=req_id,
+            status=AuditStatus.SUCCESS,
+            stdout_preview=f"files={manifest.file_count}, bytes={manifest.total_size_bytes}",
+        )
+        await self.audit_logger.write(audit_entry)
+        return manifest.model_dump()
+
+    async def _handle_pocket_pull(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка pocket.pull: чтение и возврат указанного чанка файла."""
+        _req_id, _client_ip = await self._verify_auth(params, session_info, RpcMethod.POCKET_PULL)
+        pull_params = PocketPullParams.model_validate(params)
+
+        try:
+            data, is_last, total_size = self.pocket_manager.read_chunk(pull_params)
+            res = PocketPullResult(
+                path=pull_params.path,
+                offset=pull_params.offset,
+                data_b64=base64.b64encode(data).decode("ascii"),
+                is_last=is_last,
+                total_size_bytes=total_size,
+            )
+            return res.model_dump()
+        except FileNotFoundError as e:
+            raise RpcCallError(
+                code=RpcErrorCode.FILE_NOT_FOUND,
+                message=f"Файл не найден в кармане: {pull_params.path}",
+            ) from e
+        except PathTraversalError as e:
+            raise RpcCallError(
+                code=RpcErrorCode.INVALID_PARAMS,
+                message=f"Попытка выхода за пределы кармана: {e}",
+            ) from e
+        except Exception as e:
+            raise RpcCallError(
+                code=RpcErrorCode.POCKET_SYNC_ERROR,
+                message=f"Ошибка чтения чанка '{pull_params.path}': {e}",
+            ) from e
+
+    async def _handle_pocket_push(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка pocket.push: сохранение чанка файла и проверка SHA-256."""
+        req_id, client_ip = await self._verify_auth(params, session_info, RpcMethod.POCKET_PUSH)
+        push_params = PocketPushParams.model_validate(params)
+
+        try:
+            target_path = self.pocket_manager.write_chunk(push_params)
+            chunk_len = len(base64.b64decode(push_params.data_b64))
+
+            res = PocketPushResult(
+                path=push_params.path,
+                offset=push_params.offset,
+                bytes_written=chunk_len,
+                is_last=push_params.is_last,
+                completed=target_path is not None,
+                sha256=push_params.sha256_full if target_path else None,
+            )
+
+            if target_path is not None:
+                audit_entry = AuditLogEntry(
+                    session_id=req_id,
+                    client_ip=client_ip,
+                    method=RpcMethod.POCKET_PUSH,
+                    request_id=req_id,
+                    status=AuditStatus.SUCCESS,
+                    stdout_preview=f"Saved '{push_params.path}', sha={push_params.sha256_full}",
+                )
+                await self.audit_logger.write(audit_entry)
+
+            return res.model_dump()
+
+        except PathTraversalError as e:
+            raise RpcCallError(
+                code=RpcErrorCode.INVALID_PARAMS,
+                message=f"Попытка выхода за пределы кармана: {e}",
+            ) from e
+        except ValueError as e:
+            # Нарушение контрольной суммы SHA-256
+            audit_entry = AuditLogEntry(
+                session_id=req_id,
+                client_ip=client_ip,
+                method=RpcMethod.POCKET_PUSH,
+                request_id=req_id,
+                status=AuditStatus.ERROR,
+                stderr_preview=str(e),
+            )
+            await self.audit_logger.write(audit_entry)
+            raise RpcCallError(
+                code=RpcErrorCode.POCKET_SYNC_ERROR,
+                message=str(e),
+            ) from e
+        except Exception as e:
+            raise RpcCallError(
+                code=RpcErrorCode.POCKET_SYNC_ERROR,
+                message=f"Ошибка сохранения файла '{push_params.path}': {e}",
+            ) from e
+
+    # -----------------------------------------------------------------------
+    # Обработчики подсистемы «Записки» (Notes)
+    # -----------------------------------------------------------------------
+
+    async def _handle_notes_send(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка notes.send: добавление новой текстовой записки."""
+        req_id, client_ip = await self._verify_auth(params, session_info, RpcMethod.NOTES_SEND)
+        note_params = NoteSendParams.model_validate(params)
+
+        res = await self.notes_manager.add_note(note_params)
+
+        audit_entry = AuditLogEntry(
+            session_id=req_id,
+            client_ip=client_ip,
+            method=RpcMethod.NOTES_SEND,
+            request_id=req_id,
+            status=AuditStatus.SUCCESS,
+            stdout_preview=f"note_id={res.note_id}, author={note_params.author_os}",
+        )
+        await self.audit_logger.write(audit_entry)
+
+        return res.model_dump()
+
+    async def _handle_notes_history(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка notes.history: получение списка записок."""
+        await self._verify_auth(params, session_info, RpcMethod.NOTES_HISTORY)
+        hist_params = NoteHistoryParams.model_validate(params) if params else None
+        res = await self.notes_manager.get_history(hist_params)
+        return res.model_dump()
+
+    async def _handle_notes_mark_read(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка notes.mark_read: квитирование прочтения заметок."""
+        await self._verify_auth(params, session_info, RpcMethod.NOTES_MARK_READ)
+        mark_params = NoteMarkReadParams.model_validate(params)
+        res = await self.notes_manager.mark_read(mark_params)
+        return res.model_dump()
 
     # -----------------------------------------------------------------------
     # Жизненный цикл службы

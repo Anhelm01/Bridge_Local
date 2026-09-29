@@ -454,3 +454,43 @@ class AsyncTransportClient:
                 return msg
 
             raise ProtocolError(f"Неожиданный тип сообщения в ответ на запрос: {type(msg)}")
+
+    async def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        timeout_sec: float | None = None,
+        source_node: str | None = None,
+        target_node: str | None = None,
+    ) -> Any:
+        """
+        Удобный метод вызова RPC с автоматической упаковкой в JsonRpcRequest
+        и распаковкой результата (resp.result).
+
+        Args:
+            method: Имя RPC метода.
+            params: Параметры вызова (словарь).
+            timeout_sec: Таймаут ответа в секундах.
+            source_node: Имя узла-отправителя (мульти-ноды).
+            target_node: Имя целевого узла (мульти-ноды).
+
+        Returns:
+            Поле result из JsonRpcResponse.
+
+        Raises:
+            RpcCallError: При ошибке на стороне сервера.
+            TransportError: При сетевом сбое.
+            TimeoutError: При превышении таймаута.
+        """
+        request = JsonRpcRequest(
+            method=method,
+            params=params or {},
+            source_node=source_node,
+            target_node=target_node,
+        )
+        response = await self.call_rpc(request, timeout_sec=timeout_sec)
+        return response.result
+
+    async def disconnect(self) -> None:
+        """Алиас для close() для единообразия клиентского API."""
+        await self.close()

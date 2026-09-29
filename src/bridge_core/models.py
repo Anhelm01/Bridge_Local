@@ -298,6 +298,20 @@ class NoteHistoryResult(BaseModel):
     total_count: int = Field(ge=0, description="Общее количество записок по фильтру")
 
 
+class NoteMarkReadParams(BaseModel):
+    """Параметры квитирования прочтения записок (notes.mark_read)."""
+
+    note_ids: list[str] = Field(
+        min_length=1, description="Список ID записок для отметки прочтёнными"
+    )
+
+
+class NoteMarkReadResult(BaseModel):
+    """Результат квитирования прочтения записок."""
+
+    marked_count: int = Field(ge=0, description="Количество успешно обновлённых записок")
+
+
 # ---------------------------------------------------------------------------
 # Синхронизация «Кармана» (Pocket Sync)
 # ---------------------------------------------------------------------------
@@ -343,6 +357,30 @@ class PocketPushParams(BaseModel):
     sha256_full: str | None = Field(
         default=None,
         description="SHA-256 полного файла (передаётся с последним чанком для верификации)",
+    )
+
+
+class PocketPullResult(BaseModel):
+    """Результат запроса чанка файла (pocket.pull)."""
+
+    path: str = Field(description="Относительный путь файла")
+    offset: int = Field(ge=0, description="Смещение чанка в байтах")
+    data_b64: str = Field(description="Base64-закодированные данные чанка")
+    is_last: bool = Field(description="Является ли чанк завершающим для файла")
+    total_size_bytes: int = Field(ge=0, description="Полный размер файла в байтах")
+
+
+class PocketPushResult(BaseModel):
+    """Результат отправки чанка файла (pocket.push)."""
+
+    path: str = Field(description="Относительный путь файла")
+    offset: int = Field(ge=0, description="Смещение записанного чанка")
+    bytes_written: int = Field(ge=0, description="Количество байт, записанных в этом чанке")
+    is_last: bool = Field(description="Является ли чанк завершающим")
+    completed: bool = Field(description="Завершена ли сборка файла целиком")
+    sha256: str | None = Field(
+        default=None,
+        description="SHA-256 хеш файла при completed=True (после успешной валидации)",
     )
 
 
@@ -425,6 +463,7 @@ class RpcMethod:
     EXEC_RUN = "exec.run"
     NOTES_SEND = "notes.send"
     NOTES_HISTORY = "notes.history"
+    NOTES_MARK_READ = "notes.mark_read"
     POCKET_MANIFEST = "pocket.manifest"
     POCKET_PULL = "pocket.pull"
     POCKET_PUSH = "pocket.push"
