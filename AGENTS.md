@@ -1,26 +1,32 @@
 # Bridge Local: Engineering & Workflow Guidelines
 
-## 1. Phased Execution Invariant
+## 1. Prime Directive: Modularity, Scalability & Cross-Project Reusability
+- **Long-Term Foundation:** Bridge Local is engineered not merely as a temporary two-machine bridge, but as a robust, highly extensible, and modular inter-node communication backbone with tremendous future potential.
+- **Strict Decoupling & Swappability:** Every architectural layer (`bridge_core`, length-prefix wire framing, JSON-RPC dispatcher, async transport, pocket storage engine, notes engine, executor, security/auth) must remain strictly decoupled with clean abstraction boundaries. Any component must be easily replaceable, upgradeable, or swappable (e.g., alternative transports, different process runners, or pluggable storage backends) without cascading refactors.
+- **Portability into Other Projects:** Core modules must be developed as clean, standalone building blocks capable of being extracted, distributed as standalone packages, or directly imported into future projects, distributed automation pipelines, and multi-agent coordination frameworks.
+- **Contract-Driven Interfaces:** All inter-layer and inter-node interactions must rely strictly on validated DTO contracts (Pydantic V2) and explicit public interfaces, preventing tightly coupled monolithic dependencies.
+
+## 2. Phased Execution Invariant
 - Never launch monolithic multi-agent autonomous builds for the entire project at once.
 - Work strictly sequentially, phase by phase, adhering to the phases in `docs/SDLC_PLAN.md`.
 - Do not write source code until specifications, contracts, and documentation for the current phase are validated by the user.
 
-## 2. Mandatory Reporting (devblog/)
+## 3. Mandatory Reporting (devblog/)
 - Upon completing any phase or sub-phase, create a comprehensive engineering report in `devblog/` (e.g. `devblog/phase_01_contracts.md`).
 - The report must document: objectives, deliverables, dev-logging added, test results, edge cases identified, and readiness checklist.
 
-## 3. Reference Management (ref/)
+## 4. Reference Management (ref/)
 - `ref/Hum/`: Dedicated to user-supplied references, specifications, UI/CLI concepts, and notes.
 - `ref/AI/`: Dedicated to AI-generated technical proposals, architectural diagrams, and analysis for user review and refinement.
 
-## 4. Dev-Mode Hyper-Logging Standard
+## 5. Dev-Mode Hyper-Logging Standard
 - During active development, implement comprehensive, granular logging across all layers:
   - Every network packet, RPC call, and heartbeat probe with microsecond timestamps and session IDs.
   - Subprocess execution details (PowerShell PID, arguments, `chcp 65001`, raw stream bytes).
   - File I/O operations and lock attempts in the pocket storage.
 - Design logging architecture so this verbose diagnostic trace can be cleanly isolated or disabled for the final Git release via log-level controls (TRACE/DEBUG vs INFO/ERROR) without refactoring business logic.
 
-## 5. Dual Target Persona: Human & AI Operator (agy_cli)
+## 6. Dual Target Persona: Human & AI Operator (agy_cli)
 - **Human Ergonomics (Personal Everyday Use):**
   - The CLI and TUI must remain dead-simple for the user's daily life: instant file dropping into the pocket and sending quick text notes/links between Linux and Windows in a single short command without configuration friction.
 - **AI Operator Protocol (Antigravity agy_cli Compatibility):**
