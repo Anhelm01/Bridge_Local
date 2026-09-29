@@ -339,15 +339,11 @@ src/
 
 ---
 
-## 6. Открытые вопросы (для обсуждения с пользователем)
+## 6. Принятые архитектурные решения (утверждено 2026-09-30)
 
-1. **TCP vs WebSocket:** Рекомендация — начать с raw TCP + length-prefix (минимум зависимостей, полный контроль). WebSocket можно добавить позже как альтернативный транспорт.
-
-2. **Шифрование канала:** Обязательно ли TLS в локальной сети, или достаточно PSK + HMAC для аутентификации без шифрования payload?
-
-3. **Формат конфига:** TOML (`bridge.toml`) или JSON? TOML проще для редактирования человеком.
-
-4. **Pocket Sync стратегия:** 
-   - Polling (периодическое сканирование раз в N секунд)?
-   - Watchdog (inotify на Linux / ReadDirectoryChangesW на Windows)?
-   - Ручная команда `bridge-cli pocket sync`?
+| # | Вопрос | Решение |
+|---|--------|---------|
+| 1 | Транспорт | **Raw TCP** + Length-Prefix Binary Framing (MAGIC `0x42 0x52` + uint32 BE len + UTF-8 JSON payload) |
+| 2 | Шифрование | **TLS обязательно** + PSK (pre-shared key) аутентификация + HMAC nonce anti-replay |
+| 3 | Формат конфига | **TOML** (`bridge.toml`), парсинг через встроенный `tomllib` (Python 3.11+) |
+| 4 | Sync «кармана» | **Watchdog** (inotify на Linux / ReadDirectoryChangesW на Windows) + **ручная команда** `bridge-cli pocket sync` |
