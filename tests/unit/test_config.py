@@ -22,6 +22,7 @@ from bridge_core.config import (
     ExecConfig,
     HeartbeatConfig,
     LoggingConfig,
+    NodeConfig,
     PocketConfig,
 )
 
@@ -101,11 +102,26 @@ class TestLoggingConfig:
         assert cfg.file_output is None
 
 
+class TestNodeConfig:
+    """Тесты настроек узла (мульти-ноды F1/F2)."""
+
+    def test_defaults(self) -> None:
+        cfg = NodeConfig()
+        assert cfg.name == "local-node"
+        assert cfg.display_name is None
+
+    def test_custom(self) -> None:
+        cfg = NodeConfig(name="workstation-lin", display_name="Рабочий ПК")
+        assert cfg.name == "workstation-lin"
+        assert cfg.display_name == "Рабочий ПК"
+
+
 class TestBridgeConfig:
     """Тесты корневой конфигурации."""
 
     def test_all_defaults(self) -> None:
         cfg = BridgeConfig()
+        assert cfg.node.name == "local-node"
         assert cfg.connection.port == 9732
         assert cfg.heartbeat.interval_sec == 2.0
         assert cfg.pocket.path == "./pocket"

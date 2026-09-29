@@ -19,3 +19,13 @@
   - Subprocess execution details (PowerShell PID, arguments, `chcp 65001`, raw stream bytes).
   - File I/O operations and lock attempts in the pocket storage.
 - Design logging architecture so this verbose diagnostic trace can be cleanly isolated or disabled for the final Git release via log-level controls (TRACE/DEBUG vs INFO/ERROR) without refactoring business logic.
+
+## 5. Dual Target Persona: Human & AI Operator (agy_cli)
+- **Human Ergonomics (Personal Everyday Use):**
+  - The CLI and TUI must remain dead-simple for the user's daily life: instant file dropping into the pocket and sending quick text notes/links between Linux and Windows in a single short command without configuration friction.
+- **AI Operator Protocol (Antigravity agy_cli Compatibility):**
+  - The primary programmatic operator on Linux is the Antigravity CLI agent (`agy_cli`).
+  - All commands must support a strict `--json` mode with machine-readable payloads, deterministic exit codes (0 = success, standardized non-zero error codes), zero ANSI-escape artifacts, and zero blocking on stdin.
+  - Outputs must be token-efficient to minimize LLM context consumption for lightweight models.
+- **Future-Proof Extensibility (Multi-Node & Inter-Agent):**
+  - All protocol envelopes and DTO models must reserve optional `source_node` and `target_node` fields so that 3+ node mesh routing and Linux `agy_cli` ↔ Windows `agy_cli` cross-account orchestration can be introduced without breaking wire compatibility.

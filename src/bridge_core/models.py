@@ -90,12 +90,20 @@ def _now_iso() -> str:
 
 
 class JsonRpcRequest(BaseModel):
-    """JSON-RPC 2.0 запрос."""
+    """JSON-RPC 2.0 запрос с поддержкой маршрутизации мульти-нод."""
 
     jsonrpc: str = Field(default="2.0", frozen=True)
     method: str = Field(description="Имя метода RPC (например 'exec.run', 'heartbeat.ping')")
     id: str = Field(default_factory=_generate_id, description="Уникальный идентификатор запроса")
     params: dict[str, Any] = Field(default_factory=dict, description="Параметры метода")
+    source_node: str | None = Field(
+        default=None,
+        description="Имя узла-отправителя (для мульти-узловой адресации F1/F2)",
+    )
+    target_node: str | None = Field(
+        default=None,
+        description="Имя целевого узла (для мульти-узловой адресации F1/F2)",
+    )
 
 
 class JsonRpcResponse(BaseModel):
@@ -202,6 +210,10 @@ class ExecRequestParams(BaseModel):
         default=None,
         description="Дополнительные переменные окружения",
     )
+    target_node: str | None = Field(
+        default=None,
+        description="Имя целевого узла (для будущей мульти-узловой адресации F1/F2)",
+    )
 
 
 class ExecResult(BaseModel):
@@ -242,6 +254,10 @@ class NoteSendParams(BaseModel):
 
     text: str = Field(min_length=1, max_length=10000, description="Текст записки")
     author_os: NodeOS = Field(description="ОС автора записки")
+    target_node: str | None = Field(
+        default=None,
+        description="Имя узла-получателя (None = текущий узел / все)",
+    )
 
 
 class NoteDeliveryResult(BaseModel):

@@ -146,6 +146,19 @@ class LoggingConfig(BaseModel):
     )
 
 
+class NodeConfig(BaseModel):
+    """Идентификация текущего узла (для мульти-узловой сети F1 и межагентного моста F2)."""
+
+    name: str = Field(
+        default="local-node",
+        description="Человекочитаемое имя текущего узла (например workstation-lin, win-rig)",
+    )
+    display_name: str | None = Field(
+        default=None,
+        description="Понятное отображаемое имя для человека",
+    )
+
+
 class BridgeConfig(BaseModel):
     """
     Корневая конфигурация Bridge Local.
@@ -153,6 +166,7 @@ class BridgeConfig(BaseModel):
     Загружается из bridge.toml и валидируется через Pydantic.
     """
 
+    node: NodeConfig = Field(default_factory=NodeConfig)
     connection: ConnectionConfig = Field(default_factory=ConnectionConfig)
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
     pocket: PocketConfig = Field(default_factory=PocketConfig)

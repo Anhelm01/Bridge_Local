@@ -102,12 +102,20 @@ class TestJsonRpc:
         assert req.params == {"command": "ls"}
 
     def test_request_roundtrip_json(self) -> None:
-        req = JsonRpcRequest(method="exec.run", id="test-1", params={"x": 42})
+        req = JsonRpcRequest(
+            method="exec.run",
+            id="test-1",
+            params={"x": 42},
+            source_node="workstation-lin",
+            target_node="win-gaming",
+        )
         json_str = req.model_dump_json()
         restored = JsonRpcRequest.model_validate_json(json_str)
         assert restored.method == req.method
         assert restored.id == req.id
         assert restored.params == req.params
+        assert restored.source_node == "workstation-lin"
+        assert restored.target_node == "win-gaming"
 
     def test_response_roundtrip(self) -> None:
         resp = JsonRpcResponse(id="req-1", result={"exit_code": 0, "stdout": "hello"})
