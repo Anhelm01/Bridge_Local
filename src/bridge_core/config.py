@@ -13,7 +13,7 @@ import tomllib
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +30,16 @@ class ConnectionConfig(BaseModel):
     )
     port: int = Field(
         default=9732,
-        ge=1024,
-        le=65535,
-        description="TCP-порт для подключения",
+        description="TCP-порт для подключения (0 = динамический порт ОС, 1024..65535)",
     )
+
+    @field_validator("port")
+    @classmethod
+    def validate_port(cls, v: int) -> int:
+        if v != 0 and not (1024 <= v <= 65535):
+            raise ValueError("Порт должен быть 0 (динамический) или в диапазоне 1024..65535")
+        return v
+
     timeout_sec: float = Field(
         default=5.0,
         gt=0,
