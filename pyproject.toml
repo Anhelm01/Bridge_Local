@@ -1,0 +1,67 @@
+[project]
+name = "bridge-local"
+version = "0.1.0"
+description = "Cross-platform Linux-to-Windows remote management & file sync over LAN"
+readme = "README.md"
+authors = [
+    { name = "Anhelm01", email = "anhelmgreatagain@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+# Linux-only dependencies (CLI client)
+linux = [
+    "typer>=0.15",
+    "rich>=14.0",
+]
+# Windows-only dependencies (agent/service)
+windows = [
+    "pywin32>=310",
+    "psutil>=7.0",
+]
+# Development tools
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=1.0",
+    "ruff>=0.12",
+    "mypy>=1.15",
+]
+
+[project.scripts]
+bridge-cli = "bridge_local:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+
+[tool.uv.workspace]
+members = []
+
+# --- Ruff Configuration ---
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # Allow Cyrillic in strings/docstrings/comments
+
+[tool.ruff.format]
+quote-style = "double"
+
+# --- Mypy Configuration ---
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+# --- Pytest Configuration ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
