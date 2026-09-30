@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import threading
 import time
 from pathlib import Path
@@ -22,6 +23,11 @@ from bridge_agent_win.service import WindowsBridgeService
 from bridge_client_linux.cli import app
 from bridge_client_linux.exit_codes import ExitCode
 from bridge_core.config import BridgeConfig, ConnectionConfig, PocketConfig
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="bridge_client_linux CLI tests run on Linux runners",
+)
 
 runner = CliRunner()
 

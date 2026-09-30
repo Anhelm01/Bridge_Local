@@ -384,6 +384,30 @@ class PocketPushResult(BaseModel):
     )
 
 
+class PocketOffsetParams(BaseModel):
+    """Параметры запроса смещения частичного файла (pocket.offset)."""
+
+    path: str = Field(min_length=1, description="Относительный путь файла в кармане")
+
+
+class PocketOffsetResult(BaseModel):
+    """Результат запроса смещения частичного файла (pocket.offset)."""
+
+    path: str = Field(description="Относительный путь файла")
+    offset: int = Field(
+        ge=0,
+        description="Текущий размер частичного (.part) или завершенного файла в байтах",
+    )
+    part_exists: bool = Field(
+        default=False,
+        description="Существует ли частичный файл (.part) на узле",
+    )
+    completed: bool = Field(
+        default=False,
+        description="Завершен ли целевой файл целиком на узле",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Аудит-лог (JSONL запись в pocket/logs/YYYY-MM-DD.jsonl)
 # ---------------------------------------------------------------------------
@@ -467,3 +491,4 @@ class RpcMethod:
     POCKET_MANIFEST = "pocket.manifest"
     POCKET_PULL = "pocket.pull"
     POCKET_PUSH = "pocket.push"
+    POCKET_OFFSET = "pocket.offset"

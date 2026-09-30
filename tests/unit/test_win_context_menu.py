@@ -86,10 +86,14 @@ def test_drop_file_not_found_raises(tmp_path: Path) -> None:
         drop_file_to_pocket(tmp_path / "missing.zip")
 
 
-def test_install_uninstall_on_linux_returns_false() -> None:
-    """На Linux без winreg функции возвращают False без падения."""
-    assert install_context_menu() is False
-    assert uninstall_context_menu() is False
+def test_install_uninstall_platform_behavior() -> None:
+    """На Linux без winreg функции возвращают False, на Windows в тестах успешно ставят в HKCU."""
+    if sys.platform == "win32":
+        assert install_context_menu() is True
+        assert uninstall_context_menu() is True
+    else:
+        assert install_context_menu() is False
+        assert uninstall_context_menu() is False
 
 
 def test_cli_main_help(capsys) -> None:

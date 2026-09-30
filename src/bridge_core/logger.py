@@ -23,6 +23,7 @@ from typing import Any
 
 from bridge_core.config import LoggingConfig
 from bridge_core.models import AuditLogEntry
+from bridge_core.retry import retry_with_backoff
 
 # Регистрируем уровень TRACE (5), который детальнее DEBUG (10)
 TRACE_LEVEL_NUM = 5
@@ -81,11 +82,15 @@ class AtomicJsonlLogger:
         log_path = self._get_current_log_path()
         line = entry.model_dump_json() + "\n"
 
-        with self._thread_lock, open(log_path, "a", encoding="utf-8") as f:
-            f.write(line)
-            f.flush()
-            if self.auto_fsync:
-                os.fsync(f.fileno())
+        def _do_write() -> Path:
+            with self._thread_lock, open(log_path, "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
+                if self.auto_fsync:
+                    os.fsync(f.fileno())
+            return log_path
+
+        retry_with_backoff(_do_write, max_retries=5, initial_delay=0.02)
 
         elapsed_us = (time.perf_counter_ns() - t0) // 1000
         logger.debug(

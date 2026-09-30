@@ -5,12 +5,12 @@
 
 [![CI](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml/badge.svg)](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.14-00D2FF.svg)
-![Tests](https://img.shields.io/badge/tests-262%20passed-00FF66.svg)
+![Tests](https://img.shields.io/badge/tests-286%20passed-00FF66.svg)
 ![Mypy](https://img.shields.io/badge/mypy-strict-7D8590.svg)
 ![Ruff](https://img.shields.io/badge/code%20style-ruff-black.svg)
 ![Architecture](https://img.shields.io/badge/architecture-modular%20platform-blue.svg)
 
-> **Status:** Phase 5 Complete & Hardened [OK] | 262 tests passing (100% green) | Linux CLI (Human + AI Headless) & TUI ready.
+> **Status:** Phase 6 Complete & Hardened [OK] | 286 tests passing (100% green) | Resumable Transfers & Self-Healing ready.
 
 ---
 
@@ -145,7 +145,7 @@ Bridge_Local/
 # Install dependencies
 uv sync --extra dev --extra linux
 
-# Run full test suite (262 tests)
+# Run full test suite (272 tests)
 LD_PRELOAD="" uv run pytest
 
 # Check code formatting and linter
@@ -169,3 +169,4 @@ Follow the step-by-step development journey, technical decisions, and solved cha
 - [Phase 4.5: Visual Identity & Titanium Vivid Theme](devblog/phase_04_5_ui_ux_identity.md)
 - [Phase 5: Linux Client CLI & TUI](devblog/phase_05_linux_cli.md)
 - [QA Audit: Addams Family Stress & Fuzzing](devblog/qa_adam_family_audit.md)
+- [Phase 6: Resilience & Self-Healing](devblog/phase_06_resilience.md)

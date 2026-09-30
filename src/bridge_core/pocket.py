@@ -34,6 +34,7 @@ from bridge_core.models import (
     PocketPushResult,
     RpcMethod,
 )
+from bridge_core.retry import retry_with_backoff
 from bridge_core.security import validate_safe_path
 
 logger = logging.getLogger(__name__)
@@ -165,9 +166,12 @@ class PocketManager:
 
         total_size = target_path.stat().st_size
 
-        with open(target_path, "rb") as f:
-            f.seek(params.offset)
-            data = f.read(params.chunk_size)
+        def _do_read() -> bytes:
+            with open(target_path, "rb") as f:
+                f.seek(params.offset)
+                return f.read(params.chunk_size)
+
+        data = retry_with_backoff(_do_read, max_retries=5, initial_delay=0.02)
 
         is_last = (params.offset + len(data)) >= total_size
         elapsed_us = (time.perf_counter_ns() - t0) // 1000
@@ -182,6 +186,39 @@ class PocketManager:
         )
 
         return data, is_last, total_size
+
+    def get_part_file(self, rel_path: str) -> Path:
+        """Возвращает путь к временному .part файлу для заданного относительного пути."""
+        target_path = validate_safe_path(self.pocket_dir, rel_path)
+        return target_path.parent / f".{target_path.name}.part"
+
+    def get_partial_offset(self, rel_path: str) -> int:
+        """
+        Возвращает размер существующего .part файла в байтах (смещение для докачки),
+        либо 0 если файл отсутствует.
+        """
+        part_file = self.get_part_file(rel_path)
+        if part_file.exists() and part_file.is_file():
+            return part_file.stat().st_size
+        return 0
+
+    def query_file_offset(self, rel_path: str) -> tuple[int, bool, bool]:
+        """
+        Опрашивает статус передачи файла в кармане.
+
+        Returns:
+            Кортеж (offset_bytes, part_exists, completed).
+        """
+        target_path = validate_safe_path(self.pocket_dir, rel_path)
+        part_file = target_path.parent / f".{target_path.name}.part"
+
+        if part_file.exists() and part_file.is_file():
+            return part_file.stat().st_size, True, False
+
+        if target_path.exists() and target_path.is_file():
+            return target_path.stat().st_size, False, True
+
+        return 0, False, False
 
     def write_chunk(
         self,
@@ -207,11 +244,14 @@ class PocketManager:
         part_file = target_path.parent / f".{target_path.name}.part"
         chunk_bytes = base64.b64decode(params.data_b64)
 
-        mode = "r+b" if params.offset > 0 and part_file.exists() else "wb"
-        with open(part_file, mode) as f:
-            f.seek(params.offset)
-            f.write(chunk_bytes)
-            f.flush()
+        def _do_write() -> None:
+            mode = "r+b" if params.offset > 0 and part_file.exists() else "wb"
+            with open(part_file, mode) as f:
+                f.seek(params.offset)
+                f.write(chunk_bytes)
+                f.flush()
+
+        retry_with_backoff(_do_write, max_retries=5, initial_delay=0.02)
 
         logger.debug(
             "[DEV-POCKET-WRITE] Записан чанк %s: offset=%d, len=%d b, last=%s",
@@ -237,8 +277,12 @@ class PocketManager:
                 )
                 raise ValueError(f"Нарушение целостности файла '{params.path}': SHA-256 не совпал")
 
-            # Атомарное перемещение
-            os.replace(part_file, target_path)
+            # Атомарное перемещение с защитой от Windows Sharing Violation
+            def _do_replace() -> None:
+                os.replace(part_file, target_path)
+
+            retry_with_backoff(_do_replace, max_retries=5, initial_delay=0.02)
+
             elapsed_ms = (time.perf_counter_ns() - t0) / 1_000_000
             logger.info(
                 "[POCKET-COMPLETE] Файл '%s' успешно принят и проверен (SHA-256: %s, %.2f мс)",

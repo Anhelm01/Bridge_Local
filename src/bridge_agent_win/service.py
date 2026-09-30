@@ -34,6 +34,8 @@ from bridge_core.models import (
     NoteHistoryParams,
     NoteMarkReadParams,
     NoteSendParams,
+    PocketOffsetParams,
+    PocketOffsetResult,
     PocketPullParams,
     PocketPullResult,
     PocketPushParams,
@@ -135,6 +137,7 @@ class WindowsBridgeService:
         self.server.register_handler(RpcMethod.POCKET_MANIFEST, self._handle_pocket_manifest)
         self.server.register_handler(RpcMethod.POCKET_PULL, self._handle_pocket_pull)
         self.server.register_handler(RpcMethod.POCKET_PUSH, self._handle_pocket_push)
+        self.server.register_handler(RpcMethod.POCKET_OFFSET, self._handle_pocket_offset)
         self.server.register_handler(RpcMethod.NOTES_SEND, self._handle_notes_send)
         self.server.register_handler(RpcMethod.NOTES_HISTORY, self._handle_notes_history)
         self.server.register_handler(RpcMethod.NOTES_MARK_READ, self._handle_notes_mark_read)
@@ -374,6 +377,31 @@ class WindowsBridgeService:
                 code=RpcErrorCode.POCKET_SYNC_ERROR,
                 message=f"Ошибка сохранения файла '{push_params.path}': {e}",
             ) from e
+
+    async def _handle_pocket_offset(
+        self, params: dict[str, Any], session_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Обработка pocket.offset: опрос текущего смещения для докачки файла."""
+        req_id, client_ip = await self._verify_auth(params, session_info, RpcMethod.POCKET_OFFSET)
+        offset_params = PocketOffsetParams.model_validate(params)
+        offset, part_exists, completed = self.pocket_manager.query_file_offset(offset_params.path)
+
+        res = PocketOffsetResult(
+            path=offset_params.path,
+            offset=offset,
+            part_exists=part_exists,
+            completed=completed,
+        )
+        audit_entry = AuditLogEntry(
+            session_id=req_id,
+            client_ip=client_ip,
+            method=RpcMethod.POCKET_OFFSET,
+            request_id=req_id,
+            status=AuditStatus.SUCCESS,
+            stdout_preview=f"offset={offset}, part={part_exists}, done={completed}",
+        )
+        await self.audit_logger.write(audit_entry)
+        return res.model_dump()
 
     # -----------------------------------------------------------------------
     # Обработчики подсистемы «Записки» (Notes)

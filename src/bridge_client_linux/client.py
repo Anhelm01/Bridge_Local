@@ -40,6 +40,8 @@ from bridge_core.models import (
     NoteSendParams,
     PingParams,
     PocketManifestResult,
+    PocketOffsetParams,
+    PocketOffsetResult,
     PocketPullParams,
     PocketPullResult,
     PocketPushParams,
@@ -340,15 +342,30 @@ class BridgeClient:
             chunk_size=chunk_size,
         )
 
+    async def pocket_get_offset(
+        self,
+        remote_rel_path: str,
+        target_node: str | None = None,
+    ) -> PocketOffsetResult:
+        """Опрашивает текущее смещение частично переданного файла (.part) на удаленном узле."""
+        raw = await self._call(
+            RpcMethod.POCKET_OFFSET,
+            params=PocketOffsetParams(path=remote_rel_path).model_dump(),
+            target_node=target_node,
+        )
+        return PocketOffsetResult.model_validate(raw)
+
     async def pocket_push_file(
         self,
         local_file_path: Path | str,
         target_rel_path: str | None = None,
         chunk_size: int = 65536,
         target_node: str | None = None,
+        resume: bool = True,
     ) -> PocketPushResult:
         """
         Загружает отдельный файл из локальной файловой системы в карман удаленного узла.
+        При resume=True опрашивает удаленный узел о наличии .part файла и продолжает с его смещения.
         """
         src = Path(local_file_path).resolve()
         if not src.is_file():
@@ -357,10 +374,39 @@ class BridgeClient:
         rel_path = target_rel_path or src.name
         total_size = src.stat().st_size
         offset = 0
+
+        if resume:
+            try:
+                remote_offset_res = await self.pocket_get_offset(
+                    remote_rel_path=rel_path, target_node=target_node
+                )
+                if remote_offset_res.completed:
+                    logger.info("[RESUME] Файл '%s' уже полностью загружен на узел", rel_path)
+                    return PocketPushResult(
+                        path=rel_path,
+                        offset=total_size,
+                        bytes_written=0,
+                        is_last=True,
+                        completed=True,
+                        sha256=compute_file_sha256(src),
+                    )
+                if remote_offset_res.part_exists and 0 < remote_offset_res.offset < total_size:
+                    offset = remote_offset_res.offset
+                    logger.info(
+                        "[RESUME] Обнаружен частичный файл '%s' на узле: докачка с %d",
+                        rel_path,
+                        offset,
+                    )
+            except Exception as e:
+                logger.debug("Не удалось запросить remote offset (начинаем с 0): %s", e)
+                offset = 0
+
         is_last = False
         last_result: PocketPushResult | None = None
 
         with open(src, "rb") as f:
+            if offset > 0:
+                f.seek(offset)
             while not is_last:
                 chunk = f.read(chunk_size)
                 offset_before = offset
@@ -391,12 +437,12 @@ class BridgeClient:
         dest_local_path: Path | str | None = None,
         chunk_size: int = 65536,
         target_node: str | None = None,
+        resume: bool = True,
     ) -> Path:
         """
         Скачивает отдельный файл из удаленного кармана в локальную систему.
+        При resume=True проверяет наличие локального .part файла и продолжает скачивание.
         """
-        offset = 0
-        is_last = False
         dest = (
             Path(dest_local_path).resolve()
             if dest_local_path
@@ -405,7 +451,19 @@ class BridgeClient:
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         part_file = dest.parent / f".{dest.name}.part"
-        with open(part_file, "wb") as f:
+        offset = 0
+        if resume and part_file.exists() and part_file.is_file():
+            offset = part_file.stat().st_size
+            logger.info(
+                "[RESUME] Обнаружен локальный частичный файл: возобновление со смещения %d",
+                offset,
+            )
+
+        is_last = False
+        mode = "r+b" if offset > 0 and part_file.exists() else "wb"
+        with open(part_file, mode) as f:
+            if offset > 0:
+                f.seek(offset)
             while not is_last:
                 pull_params = PocketPullParams(
                     path=remote_rel_path,
@@ -420,6 +478,7 @@ class BridgeClient:
                 res = PocketPullResult.model_validate(raw)
                 data = base64.b64decode(res.data_b64)
                 f.write(data)
+                f.flush()
                 offset += len(data)
                 is_last = res.is_last
 

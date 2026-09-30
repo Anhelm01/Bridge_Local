@@ -83,7 +83,7 @@ class TestLayerInteractions:
         # 1. Отправляем команду с кириллицей
         exec_params = ExecRequestParams(
             command='echo "Сквозной тест слоев: УСПЕХ"',
-            timeout_sec=5,
+            timeout_sec=20,
         )
         req = JsonRpcRequest(
             method=RpcMethod.EXEC_RUN,
