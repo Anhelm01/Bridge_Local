@@ -47,21 +47,27 @@ bridge-cli status
 bridge-cli status --json
 
 # 4. Liveness ping:
-bridge-cli ping --count 3 --json
+# 5. Fast Direct File Drop (send any file to Windows Pocket):
+bridge-cli send ~/Downloads/archive.zip photo.png
 
-# 5. Remote PowerShell command execution:
+# 6. Remote PowerShell command execution:
 bridge-cli exec "Get-Service -Name BridgeLocalAgent" --json
 
-# 6. Pocket storage operations:
+# 7. Pocket storage operations:
 bridge-cli pocket status --json
 bridge-cli pocket push /path/to/archive.zip --json
 bridge-cli pocket pull document.pdf --json
 bridge-cli pocket sync --direction both --json
 
-# 7. Fast notes sharing:
+# 8. Fast notes sharing:
 bridge-cli note send "https://github.com/project/spec" --json
 bridge-cli note list --limit 10 --json
 bridge-cli note read <note_id> --json
+
+# 9. Windows Explorer Context Menu ("Отправить в Карман (Bridge Local)"):
+# On Windows, right-click any file/folder in Explorer to send to Pocket.
+bridge-agent install-context-menu    # Register right-click menu in HKCU
+bridge-agent drop <file_or_dir>      # CLI drop helper
 ```
 
 ---
@@ -96,7 +102,7 @@ Bridge_Local/
 # Install dependencies
 uv sync --extra dev --extra linux
 
-# Run full test suite (177 tests)
+# Run full test suite (190 tests)
 LD_PRELOAD="" uv run pytest
 
 # Check code formatting and linter

@@ -10,7 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from bridge_client_linux.tui import (
     OFFICIAL_THEME,
@@ -28,6 +28,8 @@ from bridge_client_linux.tui import (
     render_welcome_screen,
     run_interactive_tui,
 )
+from bridge_client_linux.tui.app import dispatch_tui_action
+from bridge_core.models import ExecResult, NoteDeliveryResult, PocketPushResult
 
 
 def test_tui_official_theme_properties() -> None:
@@ -102,3 +104,70 @@ def test_tui_animations_demo() -> None:
 def test_tui_single_pass_runner() -> None:
     """Проверяет single-pass запуск без входа в блокирующий интерактивный цикл."""
     run_interactive_tui(theme=OFFICIAL_THEME, initial_mode="DASH", single_pass=True)
+
+
+def test_tui_dispatch_action(tmp_path) -> None:
+    """Проверяет обработчик команд ввода TUI (EXEC, POCKET, NOTES, DASH)."""
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    # 1. Режим EXEC
+    mock_client.exec = AsyncMock(
+        return_value=ExecResult(
+            exit_code=0,
+            stdout="Service running\n",
+            stderr="",
+            duration_ms=45,
+            started_at="2026-09-30T12:00:00Z",
+            completed_at="2026-09-30T12:00:01Z",
+        )
+    )
+    state = {
+        "exec_history": [],
+        "pocket_files": [],
+        "notes_list": [],
+        "status_msg": "",
+    }
+    dispatch_tui_action("EXEC", "Get-Service", state, client=mock_client)
+    assert len(state["exec_history"]) == 1
+    assert state["exec_history"][0][0] == "Get-Service"
+    assert "Service running" in state["exec_history"][0][1]
+    assert state["exec_history"][0][2] == 0
+    assert "Команда выполнена" in state["status_msg"]
+
+    # 2. Режим POCKET: несуществующий файл
+    dispatch_tui_action("POCKET", "/nonexistent/path/file.txt", state, client=mock_client)
+    assert "Файл не найден" in state["status_msg"]
+
+    # 3. Режим POCKET: существующий файл
+    test_f = tmp_path / "valid.txt"
+    test_f.write_text("content", encoding="utf-8")
+    mock_client.pocket_push_file = AsyncMock(
+        return_value=PocketPushResult(
+            path="valid.txt",
+            offset=0,
+            bytes_written=7,
+            is_last=True,
+            completed=True,
+            sha256="abc12345" * 8,
+        )
+    )
+    dispatch_tui_action("POCKET", str(test_f), state, client=mock_client)
+    assert len(state["pocket_files"]) == 1
+    assert state["pocket_files"][0]["name"] == "valid.txt"
+    assert "отправлен в Карман" in state["status_msg"]
+
+    # 4. Режим NOTES
+    mock_client.note_send = AsyncMock(
+        return_value=NoteDeliveryResult(
+            note_id="note-12345678",
+            timestamp="2026-09-30T12:00:00Z",
+            delivered_to=["WIN-PC"],
+            status="delivered",
+        )
+    )
+    dispatch_tui_action("NOTES", "Привет на Windows!", state, client=mock_client)
+    assert len(state["notes_list"]) == 1
+    assert state["notes_list"][0]["text"] == "Привет на Windows!"
+    assert "Заметка отправлена" in state["status_msg"]

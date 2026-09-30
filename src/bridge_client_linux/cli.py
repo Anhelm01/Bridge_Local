@@ -502,6 +502,80 @@ def cmd_pocket_pull(
 
 
 # ---------------------------------------------------------------------------
+# 3.5 Top-level Direct Send (Human Drop)
+# ---------------------------------------------------------------------------
+
+
+@app.command("send")
+def cmd_send(
+    files: list[Path] = typer.Argument(..., help="Пути к файлам для отправки в удалённый карман"),
+    target_dir: str | None = typer.Option(
+        None, "--target-dir", "-d", help="Относительный подкаталог в удаленном кармане"
+    ),
+    json_mode: bool = typer.Option(False, "--json", "-j", help="Вывод в формате JSON"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
+    host: str | None = typer.Option(None, "--host", "-h", help="Хост удаленного узла"),
+    port: int | None = typer.Option(None, "--port", "-p", help="Порт удаленного узла"),
+    token: str | None = typer.Option(None, "--token", "-t", help="PSK токен"),
+    node: str | None = typer.Option(None, "--node", "-n", help="Имя узла-получателя"),
+) -> None:
+    """Прямая отправка файлов в удалённый карман (Direct File Drop)."""
+    client = _get_client(config, host, port, token, node)
+
+    # Предварительная валидация существования файлов до сетевого подключения
+    resolved_files: list[Path] = []
+    for fp in files:
+        resolved = fp.resolve()
+        if not resolved.is_file():
+            _handle_error(
+                BridgeClientError(f"Файл не найден или не является обычным файлом: {fp}"),
+                as_json=json_mode,
+            )
+            return
+        resolved_files.append(resolved)
+
+    async def _action() -> list[dict[str, Any]]:
+        results = []
+        async with client:
+            for resolved in resolved_files:
+                target_rel = (
+                    f"{target_dir.strip('/')}/{resolved.name}" if target_dir else resolved.name
+                )
+                file_size = resolved.stat().st_size
+                res = await client.pocket_push_file(
+                    resolved, target_rel_path=target_rel, target_node=node
+                )
+                results.append(
+                    {
+                        "file": resolved.name,
+                        "local_path": str(resolved),
+                        "target_rel_path": target_rel,
+                        "sha256": res.sha256 or "",
+                        "total_bytes": file_size,
+                        "completed": res.completed,
+                    }
+                )
+        return results
+
+    try:
+        data = _run(_action())
+    except Exception as e:
+        _handle_error(e, as_json=json_mode)
+        return
+
+    if json_mode:
+        _output_json({"sent": data, "count": len(data)})
+        return
+
+    for item in data:
+        console.print(
+            f"[bold {OFFICIAL_THEME.green}][OK][/] Отправлен [bold white]{item['file']}[/] "
+            f"({item['total_bytes']} B, SHA-256: [dim]{item['sha256'][:12]}...[/]) ──► "
+            f"[bold {OFFICIAL_THEME.blue}]{item['target_rel_path']}[/]"
+        )
+
+
+# ---------------------------------------------------------------------------
 # 4. Notes Subcommands
 # ---------------------------------------------------------------------------
 

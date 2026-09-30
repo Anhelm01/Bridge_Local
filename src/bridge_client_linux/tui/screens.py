@@ -191,24 +191,25 @@ def render_operational_header(
 
 
 def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> None:
-    """Верхний таб-бар переключения режимов."""
+    """Верхний таб-бар переключения режимов с поддержкой функциональных клавиш F1..F6."""
     modes = [
-        ("DASH", "1"),
-        ("POCKET", "2"),
-        ("NOTES", "3"),
-        ("EXEC", "4"),
-        ("CONFIG", "5"),
-        ("DEV", "6"),
+        ("DASH", "F1"),
+        ("POCKET", "F2"),
+        ("NOTES", "F3"),
+        ("EXEC", "F4"),
+        ("CONFIG", "F5"),
+        ("DEV", "F6"),
     ]
     bar = Text()
     bar.append("[BRIDGE] ", style=f"bold black on {theme.blue}")
     for i, (name, key) in enumerate(modes):
         if name == active_mode:
-            bar.append(f"█ {key}:{name}", style="bold white on #1F6FEB")
+            bar.append(f"█ [{key}:{name}]", style="bold white on #1F6FEB")
         else:
-            bar.append(f"{key}:{name}", style=f"dim {theme.secondary}")
+            bar.append(f"[{key}:{name}]", style=f"dim {theme.secondary}")
         if i < len(modes) - 1:
             bar.append(" │ ")
+    bar.append("  [dim](Переключение: Tab / F1..F6)[/]")
     console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
 
 
@@ -225,6 +226,8 @@ def render_dashboard_mode(
     mem = d.get("remote", {}).get("memory_used_mb", 14320)
     uptime = d.get("remote", {}).get("uptime_seconds", 412320)
     uptime_str = f"{uptime // 86400}d {(uptime % 86400) // 3600}h {(uptime % 3600) // 60}m"
+    input_buf = d.get("input_buffer", "")
+    status_msg = d.get("status_msg", "")
 
     grid = Table.grid(expand=True)
     grid.add_column(ratio=1)
@@ -266,6 +269,21 @@ def render_dashboard_mode(
     grid.add_row(left, right)
     console.print(grid)
 
+    prompt_bar = Text()
+    prompt_bar.append("КОМАНДА > ", style=f"bold {theme.blue}")
+    prompt_bar.append(input_buf, style="bold white")
+    prompt_bar.append("█", style=f"bold {theme.primary}")
+    console.print(
+        Panel(
+            prompt_bar,
+            title="[dim][F1..F6/Tab] Вкладки | :send <файл> | :exec <команда> | :q Выход[/dim]",
+            border_style=theme.blue if input_buf else theme.secondary,
+            padding=0,
+        )
+    )
+    if status_msg:
+        console.print(f" {status_msg}")
+
 
 def render_pocket_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
@@ -274,6 +292,11 @@ def render_pocket_mode(
     """Режим 2: POCKET / КАРМАН (F2)."""
     render_operational_header(theme)
     render_mode_tabs("POCKET", theme)
+
+    d = pocket_data or {}
+    input_buf = d.get("input_buffer", "")
+    status_msg = d.get("status_msg", "")
+    files = d.get("pocket_files")
 
     table = Table(
         title="[ ХРАНИЛИЩЕ КАРМАНА / POCKET STORAGE (~/.bridge_local/pocket/) ]", expand=True
@@ -284,36 +307,62 @@ def render_pocket_mode(
     table.add_column("SHA-256", style=f"bold {theme.green}", justify="center")
     table.add_column("Активность / Статус")
 
-    table.add_row(
-        "report_phase_05.docx",
-        "2.4 MB",
-        f"[bold {theme.blue}]LNX --> WIN[/]",
-        "[OK] d9e4f1a...",
-        f"[bold {theme.green}]SYNCED[/]",
-    )
-    table.add_row(
-        "setup_env_win.ps1",
-        "12.8 KB",
-        f"[bold {theme.purple}]WIN --> LNX[/]",
-        "[OK] 3a7c88b...",
-        f"[bold {theme.green}]SYNCED[/]",
-    )
-    table.add_row(
-        "model_weights.bin",
-        "1.2 GB",
-        f"[bold {theme.blue}]LNX --> WIN[/]",
-        f"[bold {theme.amber}][⠋ SYNC][/]",
-        f"[bold {theme.amber}][>>> 68%][/] [bold {theme.blue}]48 MB/s[/]",
-    )
-    table.add_row(
-        "screenshot_crash.png",
-        "840 KB",
-        f"[bold {theme.purple}]WIN --> LNX[/]",
-        "[OK] f7a012c...",
-        f"[bold {theme.green}]SYNCED[/]",
-    )
+    if files:
+        for f in files:
+            table.add_row(
+                f.get("name", "file"),
+                f.get("size", "0 B"),
+                f.get("direction", "LNX --> WIN"),
+                f.get("sha", "[OK]"),
+                f"[bold {theme.green}]{f.get('status', 'SYNCED')}[/]",
+            )
+    else:
+        table.add_row(
+            "report_phase_05.docx",
+            "2.4 MB",
+            f"[bold {theme.blue}]LNX --> WIN[/]",
+            "[OK] d9e4f1a...",
+            f"[bold {theme.green}]SYNCED[/]",
+        )
+        table.add_row(
+            "setup_env_win.ps1",
+            "12.8 KB",
+            f"[bold {theme.purple}]WIN --> LNX[/]",
+            "[OK] 3a7c88b...",
+            f"[bold {theme.green}]SYNCED[/]",
+        )
+        table.add_row(
+            "model_weights.bin",
+            "1.2 GB",
+            f"[bold {theme.blue}]LNX --> WIN[/]",
+            f"[bold {theme.amber}][⠋ SYNC][/]",
+            f"[bold {theme.amber}][>>> 68%][/] [bold {theme.blue}]48 MB/s[/]",
+        )
+        table.add_row(
+            "screenshot_crash.png",
+            "840 KB",
+            f"[bold {theme.purple}]WIN --> LNX[/]",
+            "[OK] f7a012c...",
+            f"[bold {theme.green}]SYNCED[/]",
+        )
 
     console.print(table)
+
+    prompt_text = Text()
+    prompt_text.append("PUSH FILE > ", style=f"bold {theme.amber}")
+    prompt_text.append(input_buf, style="bold white")
+    prompt_text.append("█", style=f"bold {theme.primary}")
+
+    panel = Panel(
+        prompt_text,
+        title=f"[bold {theme.primary}][ ПРЯМАЯ ОТПРАВКА В КАРМАН / DIRECT FILE DROP ][/]",
+        subtitle="[dim]Путь к файлу или перетащите мышкой ──► [Enter] Отправить на Windows[/dim]",
+        border_style=theme.amber if input_buf else theme.secondary,
+        padding=(0, 1),
+    )
+    console.print(panel)
+    if status_msg:
+        console.print(f" {status_msg}")
 
 
 def render_notes_mode(
@@ -324,39 +373,64 @@ def render_notes_mode(
     render_operational_header(theme)
     render_mode_tabs("NOTES", theme)
 
+    d = notes_data or {}
+    input_buf = d.get("input_buffer", "")
+    status_msg = d.get("status_msg", "")
+    notes_list = d.get("notes_list", [])
+
     grid = Table.grid(expand=True)
     grid.add_column(ratio=2)
     grid.add_column(ratio=1)
 
+    feed_lines = []
+    if notes_list:
+        for n in notes_list[-6:]:
+            t = n.get("time", "12:00:00")
+            author = n.get("author", "NODE")
+            text = n.get("text", "")
+            feed_lines.append(f"[bold {theme.purple}][{t}] {author}:[/]\n  {text}\n")
+    else:
+        feed_lines.append(
+            f"[bold {theme.purple}][10:04:15] WIN-PC (Windows Operator):[/]\n"
+            f"  Служба BridgeLocalAgent запущена в фоне, кодировка UTF-8 проверена.\n"
+        )
+        feed_lines.append(
+            f"[bold {theme.blue}][10:08:22] LINUX (Antigravity agy_cli):[/]\n"
+            f"  Интеграционные тесты ядра и RPC завершены успешно (190 тестов, 11с).\n"
+        )
+        feed_lines.append(
+            f"[bold {theme.amber}][10:11:03] USER (Operator Note):[/]\n"
+            f"  Проверь температуру GPU на Windows перед запуском бенчмарка.\n"
+        )
+
+    feed_lines.append(
+        "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
+    )
+    feed_lines.append(
+        "[bold white]Ввод заметки ([Enter] Отправить на все узлы | [Tab/F1..F6] Навигация):[/]"
+    )
+    feed_lines.append(f"[bold {theme.blue}]NOTE > [/][bold white]{input_buf}[/][blink]█[/]")
+    if status_msg:
+        feed_lines.append(f"  {status_msg}")
+
     notes_feed = Panel(
-        f"""[bold {theme.purple}][10:04:15] WIN-PC (Windows Operator):[/]
-  Служба BridgeLocalAgent запущена в фоне, кодировка UTF-8 (chcp 65001) проверена.
-
-[bold {theme.blue}][10:08:22] LINUX (Antigravity agy_cli):[/]
-  Интеграционные тесты ядра и RPC завершены успешно (151 тест, 9.64с).
-  Подготовлена передача весов модели через карман.
-
-[bold {theme.amber}][10:11:03] USER (Operator Note):[/]
-  Проверь температуру GPU на Windows перед запуском бенчмарка.
-
-[dim]─────────────────────────────────────────────────────────────────────────────[/]
-[bold white]Ввод новой заметки ([Enter] Отправить на все узлы | [Esc] Отмена):[/]
-[bold {theme.blue}]> [/][blink]_[/]""",
+        "\n".join(feed_lines),
         title="[bold white][ ЖУРНАЛ ЗАМЕТОК / NOTES STREAM ][/]",
-        border_style=theme.secondary,
+        border_style=theme.blue if input_buf else theme.secondary,
     )
 
     stats = Panel(
         f"""[bold white]СТАТИСТИКА ЗАМЕТОК[/]
-|- Всего записей: 43
+|- Всего записей: {len(notes_list) if notes_list else 43}
 |- Непрочитанных: [bold {theme.green}][0][/]
 |- Файл: [dim]notes.jsonl[/]
 +- Режим: [bold {theme.green}]Append-Only (Atomic)[/]
 
-[bold {theme.blue}]ФИЛЬТРЫ:[/][dim]
- [A] Все заметки
- [U] Только новые
- [S] Поиск по тексту[/dim]""",
+[bold {theme.blue}]УПРАВЛЕНИЕ:[/][dim]
+ [Enter] Отправить заметку
+ [F1..F6] Сменить вкладку
+ [Tab] Следующая вкладка
+ [Ctrl+C] Выход[/dim]""",
         title="[bold white][ ИНФО / СТАТИСТИКА ][/]",
         border_style=theme.secondary,
     )
@@ -373,29 +447,60 @@ def render_exec_mode(
     render_operational_header(theme)
     render_mode_tabs("EXEC", theme)
 
+    d = exec_data or {}
+    input_buf = d.get("input_buffer", "")
+    status_msg = d.get("status_msg", "")
+    history = d.get("exec_history", [])
+
+    lines = [
+        "[bold white]УДАЛЕННАЯ СЕССИЯ POWERSHELL (WIN-PC)[/]",
+        "Кодировка: UTF-8 (chcp 65001) | Права: Elevated (Admin) | Таймаут: 30s",
+        f"Статус раннера: [bold {theme.green}][READY][/] | Опрос: [bold {theme.amber}][⠼ IDLE][/]",
+        "",
+    ]
+
+    if history:
+        for cmd, output, code in history[-4:]:
+            lines.append(f"[bold {theme.purple}]PS C:\\BridgeService> [/][bold white]{cmd}[/]")
+            if output:
+                lines.append(output.strip())
+            color = theme.green if code == 0 else theme.red
+            lines.append(f"[dim](Код завершения: [bold {color}]{code}[/])[/dim]\n")
+    else:
+        lines.extend(
+            [
+                f'[bold {theme.purple}]PS> [/][white]Get-Service "BridgeLocalAgent"[/]',
+                "",
+                "Status   Name               DisplayName",
+                "------   ----               -----------",
+                f"[bold {theme.green}]Running[/]  BridgeLocalAgent   Bridge Local Windows Daemon",
+                "",
+                f"[bold {theme.purple}]PS> [/][white]Get-Process python | Select Id, WS[/]",
+                "",
+                "   Id        CPU       WS",
+                "   --        ---       --",
+                " 4912   1.421875 42811392",
+                "",
+            ]
+        )
+
+    lines.append(
+        "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
+    )
+    lines.append(
+        "[bold white]Ввод команды ([Enter] Выполнить | [F1..F6/Tab] Навигация | [Ctrl+C] Выход):[/]"
+    )
+    lines.append(
+        f"[bold {theme.blue}]PS C:\\BridgeService> [/][bold white]{input_buf}[/][blink]█[/]"
+    )
+    if status_msg:
+        lines.append(f"  {status_msg}")
+
     console.print(
         Panel(
-            f"""[bold white]УДАЛЕННАЯ СЕССИЯ POWERSHELL (WIN-PC)[/]
-Кодировка: UTF-8 (chcp 65001) | Права: Elevated (Admin) | Таймаут: 30s
-Статус раннера: [bold {theme.green}][READY][/] | Фоновый опрос: [bold {theme.amber}][⠼ IDLE][/]
-
-[bold {theme.purple}]PS C:\\BridgeService> [/][white]Get-Service -Name "BridgeLocalAgent"[/]
-
-Status   Name               DisplayName
-------   ----               -----------
-[bold {theme.green}]Running[/]  BridgeLocalAgent   Bridge Local Windows Daemon v0.4.0
-
-[bold {theme.purple}]PS C:\\BridgeService> [/][white]Get-Process python | Select Id, WS[/]
-
-   Id        CPU       WS
-   --        ---       --
- 4912   1.421875 42811392
-
-[dim]─────────────────────────────────────────────────────────────────────────────[/]
-[bold white]Ввод команды ([Enter] Выполнить на WIN-PC | [Ctrl+C] Прервать):[/]
-[bold {theme.blue}]PS C:\\BridgeService> [/] [blink]_[/]""",
+            "\n".join(lines),
             title="[bold white][ УДАЛЕННЫЙ ИСПОЛНИТЕЛЬ POWERSHELL / REMOTE EXEC ][/]",
-            border_style=theme.secondary,
+            border_style=theme.purple if input_buf else theme.secondary,
         )
     )
 

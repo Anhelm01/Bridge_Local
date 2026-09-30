@@ -1,0 +1,22 @@
+Windows Registry Editor Version 5.00
+
+; ==============================================================================
+; Bridge Local — Интеграция с контекстным меню Проводника Windows
+; Отправка любого файла или папки в Карман по правому клику мыши (HKCU)
+; ==============================================================================
+
+; --- Для файлов ---
+[HKEY_CURRENT_USER\Software\Classes\*\shell\BridgeLocalSend]
+@="Отправить в Карман (Bridge Local)"
+"Icon"="shell32.dll,46"
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\BridgeLocalSend\command]
+@="\"pythonw.exe\" -m bridge_agent_win.context_menu drop \"%1\""
+
+; --- Для каталогов ---
+[HKEY_CURRENT_USER\Software\Classes\Directory\shell\BridgeLocalSend]
+@="Отправить в Карман (Bridge Local)"
+"Icon"="shell32.dll,46"
+
+[HKEY_CURRENT_USER\Software\Classes\Directory\shell\BridgeLocalSend\command]
+@="\"pythonw.exe\" -m bridge_agent_win.context_menu drop \"%1\""

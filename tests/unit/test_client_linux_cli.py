@@ -385,3 +385,70 @@ def test_cli_welcome_and_tui_single_pass():
     res_tui = runner.invoke(app, ["tui", "--single-pass", "--mode", "DASH"])
     assert res_tui.exit_code == 0
     assert "DRAWBRIDGE" in res_tui.stdout
+
+
+def test_cli_send_success(cli_server, tmp_path: Path):
+    """Проверяет успешную прямую отправку файла через команду bridge-cli send."""
+    _, port, srv_pocket = cli_server
+    local_pocket = tmp_path / "client_pocket"
+    local_pocket.mkdir()
+    cfg_file = tmp_path / "bridge.toml"
+    BridgeConfig(pocket=PocketConfig(path=str(local_pocket))).save(cfg_file)
+
+    test_file = tmp_path / "quick_drop.txt"
+    test_file.write_text("Hello via bridge-cli send!", encoding="utf-8")
+
+    res = runner.invoke(
+        app,
+        ["send", str(test_file), "--port", str(port), "--config", str(cfg_file), "--json"],
+    )
+    assert res.exit_code == 0
+    data = json.loads(res.stdout)
+    assert data["count"] == 1
+    assert data["sent"][0]["file"] == "quick_drop.txt"
+    assert data["sent"][0]["completed"] is True
+
+    # Проверяем фактическое появление файла на стороне сервера
+    received = srv_pocket / "quick_drop.txt"
+    assert received.exists()
+    assert received.read_text(encoding="utf-8") == "Hello via bridge-cli send!"
+
+
+def test_cli_send_multiple_files(cli_server, tmp_path: Path):
+    """Проверяет отправку нескольких файлов одной командой."""
+    _, port, srv_pocket = cli_server
+    local_pocket = tmp_path / "client_pocket"
+    local_pocket.mkdir()
+    cfg_file = tmp_path / "bridge.toml"
+    BridgeConfig(pocket=PocketConfig(path=str(local_pocket))).save(cfg_file)
+
+    f1 = tmp_path / "doc1.pdf"
+    f2 = tmp_path / "doc2.png"
+    f1.write_bytes(b"%PDF-1.4 dummy")
+    f2.write_bytes(b"\x89PNG dummy")
+
+    res = runner.invoke(
+        app,
+        ["send", str(f1), str(f2), "--port", str(port), "--config", str(cfg_file)],
+    )
+    assert res.exit_code == 0
+    assert "Отправлен doc1.pdf" in res.stdout
+    assert "Отправлен doc2.png" in res.stdout
+    assert (srv_pocket / "doc1.pdf").exists()
+    assert (srv_pocket / "doc2.png").exists()
+
+
+def test_cli_send_nonexistent_file(tmp_path: Path):
+    """Проверяет быструю валидацию отсутствующего файла без сетевого подключения (ExitCode 1)."""
+    cfg_file = tmp_path / "bridge.toml"
+    BridgeConfig().save(cfg_file)
+
+    res = runner.invoke(
+        app,
+        ["send", str(tmp_path / "not_there.bin"), "--config", str(cfg_file), "--json"],
+    )
+    assert res.exit_code == ExitCode.GENERAL_ERROR
+    data = json.loads(res.stdout)
+    assert data["status"] == "error"
+    assert data["error_code"] == 1
+    assert "не найден" in data["message"]
