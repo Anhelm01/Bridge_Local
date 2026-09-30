@@ -51,53 +51,53 @@ class PaletteTheme:
 PALETTES: dict[int, PaletteTheme] = {
     1: PaletteTheme(
         id=1,
-        name="Acid Cyber / Plum Violet",
-        desc="NFT-вайб из буфера: #D0FF00 (Banana Yellow) + #8116E0 (Plum Violet)",
-        primary="#D0FF00",
-        secondary="#8116E0",
-        text="#FEFFFC",
-        muted="#5C6370",
-        border="#8116E0",
+        name="Titanium Machined / Clean Slate",
+        desc="Холодный авиационный титан: #F0F6FC (Cold Titanium) + #8B949E (Steel Slate)",
+        primary="#F0F6FC",
+        secondary="#8B949E",
+        text="#E6EDF3",
+        muted="#484F58",
+        border="#8B949E",
     ),
     2: PaletteTheme(
         id=2,
-        name="Cyber Noir / Graphic Novel",
-        desc="Cyber Noir из буфера: #E6006A (Electric Magenta) + #027C7D (Deep Teal)",
-        primary="#E6006A",
-        secondary="#027C7D",
-        text="#FFFFFF",
-        muted="#5C6370",
-        border="#027C7D",
+        name="Graphite Carbon / Deep Slate",
+        desc="Матовый графит и карбон: #E2E8F0 (Frost Silver) + #64748B (Cool Slate)",
+        primary="#E2E8F0",
+        secondary="#64748B",
+        text="#F1F5F9",
+        muted="#334155",
+        border="#64748B",
     ),
     3: PaletteTheme(
         id=3,
-        name="Chiral Amber / DS1 Classic",
-        desc="Каноничный Death Stranding: #F5A623 (Chiral Gold) + #56B6C2 (Cyan) / Navy",
-        primary="#F5A623",
-        secondary="#56B6C2",
-        text="#FFFFFF",
-        muted="#5C6370",
-        border="#DCA134",
+        name="Warm Tungsten / Smoked Ash",
+        desc="Тёплый индустриальный монохром: #F5F2EB (Alabaster Bone) + #9E978E (Smoked Tungsten)",
+        primary="#F5F2EB",
+        secondary="#9E978E",
+        text="#FAF8F5",
+        muted="#524F4A",
+        border="#9E978E",
     ),
     4: PaletteTheme(
         id=4,
-        name="Titanium Monochrome / Steel",
-        desc="Титановый стелс: #E6EDF3 (Titanium White) + #ABB2BF (Cold Slate)",
-        primary="#E6EDF3",
-        secondary="#ABB2BF",
-        text="#FFFFFF",
-        muted="#5C6370",
-        border="#ABB2BF",
+        name="Obsidian Tactical / Zinc Stealth",
+        desc="Предельный тактический стелс: #FFFFFF (Crisp White) + #71717A (Tactical Zinc)",
+        primary="#FFFFFF",
+        secondary="#71717A",
+        text="#FAFAFA",
+        muted="#3F3F46",
+        border="#71717A",
     ),
     5: PaletteTheme(
         id=5,
-        name="Matrix Emerald / Tokyo Terminal",
-        desc="Хакерский ретро-терминал: #00FF66 (Terminal Emerald) + #0D7377 (Deep Pine)",
-        primary="#00FF66",
-        secondary="#0D7377",
-        text="#E0F2F1",
-        muted="#5C6370",
-        border="#0D7377",
+        name="Nordic Quartz / Mineral Grey",
+        desc="Скандинавский минеральный кварц: #ECEFF4 (Polar Snow) + #7E8B85 (Quartz Slate)",
+        primary="#ECEFF4",
+        secondary="#7E8B85",
+        text="#F8FAFC",
+        muted="#414C47",
+        border="#7E8B85",
     ),
 }
 
@@ -312,14 +312,14 @@ def render_dashboard_mode(theme: PaletteTheme) -> None:
     )
 
     right = Panel(
-        """[bold white]СОСТОЯНИЕ ХРАНИЛИЩА И ОЧЕРЕДЕЙ[/]
-[bold yellow]КАРМАН (Pocket Storage Engine):[/]
+        f"""[bold white]СОСТОЯНИЕ ХРАНИЛИЩА И ОЧЕРЕДЕЙ[/]
+[bold {theme.primary}]КАРМАН (Pocket Storage Engine):[/]
   |- Путь: ~/.bridge_local/pocket/
   |- Файлов: 18 объектов (1.4 GB)
-  |- FS Watchdog: [green]АКТИВЕН[/] (0.5s debounce)
+  |- FS Watchdog: [bold green]АКТИВЕН[/] (0.5s debounce)
   +- Статус: [bold green][OK] 100% SHA-256 MATCH[/]
 
-[bold cyan]ЗАМЕТКИ (Notes Engine):[/]
+[bold {theme.secondary}]ЗАМЕТКИ (Notes Engine):[/]
   |- Файл: notes.jsonl
   |- Всего записей: 42
   +- Непрочитанных: [bold green][0] (Все прочитаны)[/]""",
@@ -343,8 +343,8 @@ def render_pocket_mode(theme: PaletteTheme) -> None:
         title="[ ХРАНИЛИЩЕ КАРМАНА / POCKET STORAGE (~/.bridge_local/pocket/) ]", expand=True
     )
     table.add_column("Файл / Каталог", style="bold white")
-    table.add_column("Размер", style="cyan", justify="right")
-    table.add_column("Направление", style="yellow", justify="center")
+    table.add_column("Размер", style="dim white", justify="right")
+    table.add_column("Направление", style=f"bold {theme.secondary}", justify="center")
     table.add_column("SHA-256", style="bold green", justify="center")
     table.add_column("Активность / Статус", style=f"bold {theme.primary}")
 
@@ -359,8 +359,8 @@ def render_pocket_mode(theme: PaletteTheme) -> None:
         "model_weights.bin",
         "1.2 GB",
         "LNX --> WIN",
-        "[yellow][⠋ SYNC][/]",
-        f"[bold {theme.primary}][>>> 68%][/] [yellow]48 MB/s[/]",
+        "[dim white][SYNC][/dim white]",
+        f"[bold {theme.primary}][>>> 68%][/] [white]48 MB/s[/]",
     )
     table.add_row(
         "screenshot_crash.png", "840 KB", "WIN --> LNX", "[OK] f7a012c...", "[green]SYNCED[/]"
@@ -400,13 +400,13 @@ def render_notes_mode(theme: PaletteTheme) -> None:
     )
 
     stats = Panel(
-        """[bold white]СТАТИСТИКА ЗАМЕТОК[/]
+        f"""[bold white]СТАТИСТИКА ЗАМЕТОК[/]
 |- Всего записей: 43
 |- Непрочитанных: [bold green][0][/]
 |- Файл: [dim]notes.jsonl[/]
 +- Режим: [green]Append-Only (Atomic)[/]
 
-[bold yellow]ФИЛЬТРЫ:[/][dim]
+[bold {theme.secondary}]ФИЛЬТРЫ:[/][dim]
  [A] Все заметки
  [U] Только новые
  [S] Поиск по тексту[/dim]""",
@@ -461,8 +461,8 @@ def render_config_mode(theme: PaletteTheme) -> None:
 
     table = Table(title="[ РЕЕСТР УЗЛОВ И СЕТЕВЫЕ ПАРАМЕТРЫ / NODE CONFIG ]", expand=True)
     table.add_column("Узел (Node ID)", style="bold white")
-    table.add_column("Роль / Назначение", style="cyan")
-    table.add_column("Сетевой Адрес", style="yellow")
+    table.add_column("Роль / Назначение", style="dim white")
+    table.add_column("Сетевой Адрес", style=f"bold {theme.secondary}")
     table.add_column("Heartbeat", style="white")
     table.add_column("Безопасность", style="bold green")
 
@@ -524,11 +524,11 @@ def demo_process_animations(theme: PaletteTheme) -> None:
         line = Text()
         line.append(f"  [{s}] ", style=f"bold {theme.primary}")
         line.append("Pocket Sync: ", style="bold white")
-        line.append("model_weights.bin ", style="cyan")
+        line.append("model_weights.bin ", style="dim white")
         line.append(f"{p} ", style=f"bold {theme.primary}")
-        line.append(f"68% ({45 + (step % 5)} MB/s) ", style="yellow")
+        line.append(f"68% ({45 + (step % 5)} MB/s) ", style=f"bold {theme.secondary}")
         line.append(" | Heartbeat probe: ", style="dim")
-        line.append("0.38ms [OK] ", style="green")
+        line.append("0.38ms [OK] ", style="bold green")
 
         sys.stdout.write("\r" + line.plain)
         sys.stdout.flush()
@@ -539,19 +539,21 @@ def demo_process_animations(theme: PaletteTheme) -> None:
 
 
 def render_palettes_table() -> None:
-    """Выводит сравнительную таблицу всех 5 цветовых тем."""
-    table = Table(title="🎨 5 ВАРИАНТОВ ЦВЕТОВЫХ ПАЛИТР (Выбор: all 1 .. all 5)", expand=True)
+    """Выводит сравнительную таблицу всех 5 нейтральных монохромных тем."""
+    table = Table(
+        title="🎨 5 НЕЙТРАЛЬНЫХ МОНОХРОМНЫХ ПАЛИТР (Выбор: all 1 .. all 5)", expand=True
+    )
     table.add_column("№", style="bold white", width=4)
-    table.add_column("Название темы", style="bold", width=30)
-    table.add_column("Primary (Акцент)", width=18)
-    table.add_column("Secondary (Сеть)", width=18)
+    table.add_column("Название темы", style="bold", width=34)
+    table.add_column("Primary (Светлый титан)", width=24)
+    table.add_column("Secondary (Сталь/Рамка)", width=24)
     table.add_column("Пример плашки", width=22)
 
     for p_id, p in PALETTES.items():
         preview = Text()
         preview.append(" [BRIDGE] ", style=f"bold black on {p.primary}")
         preview.append(" ")
-        preview.append("[OK]", style=f"bold {p.primary}")
+        preview.append("[OK]", style="bold green")
         preview.append(" 0.38ms", style=f"bold {p.secondary}")
 
         table.add_row(
@@ -563,7 +565,7 @@ def render_palettes_table() -> None:
         )
 
     console.print(table)
-    console.print("\n[dim]Выбор палитры: uv run python ref/AI/ascii_preview.py all [1-5][/dim]\n")
+    console.print("\n[dim]Выбор палитры: uv run python ref/AI/preview.py all [1-5][/dim]\n")
 
 
 # ===========================================================================
