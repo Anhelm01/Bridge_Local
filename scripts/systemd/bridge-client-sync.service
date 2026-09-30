@@ -1,0 +1,15 @@
+[Unit]
+Description=Bridge Local Client — Background Pocket File Sync Watcher
+Documentation=https://github.com/Anhelm01/Bridge_Local
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/bridge-cli pocket sync --direction both
+Restart=on-failure
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

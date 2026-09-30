@@ -174,12 +174,24 @@ flowchart TD
 ---
 
 ### Фаза 7. Сборка, упаковка и развертывание
+**Статус:** Завершена [OK] (30.09.2026)
 * **Задачи:**
-  1. Упаковка агента Windows в автономный исполняемый файл `.exe` (PyInstaller) + PowerShell скрипт регистрации службы `install-service.ps1`.
-  2. Упаковка клиента Linux (`uv tool` / wheel пакет).
-  3. Конфигурирование разделения Dev-логов и релизного чистого режима.
-  4. Финальная документация развертывания (`DEPLOYMENT.md`, `README.md`).
-* **Критерий завершения (DoD):** Успешная чистая установка на обоих типах ОС из дистрибутива. Отчет `devblog/phase_07_release.md`.
+  1. Автономный исполняемый файл агента Windows (PyInstaller `bridge-agent.spec` + `scripts/build-windows-agent.ps1`) и служба Windows SCM (`BridgeLocalAgent` через `win32serviceutil.ServiceFramework` и `bridge-agent service`).
+  2. Продакшен PowerShell скрипты развертывания в `scripts/`:
+     - `scripts/install-service.ps1`: регистрация службы в SCM, настройка автоматического перезапуска при сбоях (`sc.exe failure`), добавление исключений Windows Defender (`Add-MpPreference`), отключение индексирования Windows Search на каталоге `pocket` (устранение файловых коллизий `WinError 32`), входящее правило брандмауэра (`New-NetFirewallRule`).
+     - `scripts/uninstall-service.ps1`: корректная остановка (`Stop-Service`), удаление службы из реестра SCM, очистка Defender и правил брандмауэра.
+  3. Упаковка клиента Linux и кросс-платформенного дистрибутива:
+     - Настройка wheel-пакетирования со всеми четырьмя модулями (`bridge_core`, `bridge_agent_win`, `bridge_client_linux`, `bridge_local`).
+     - Точки входа `bridge-cli` и `bridge-agent`, запуск через `python -m <package>`.
+     - Проверена чистая установка через `uv tool install .`, `pip install dist/*.whl` в изолированном venv.
+  4. Конфигурирование разделения Dev-логов и релизного чистого режима:
+     - `dev_mode = false` обеспечивает чистый релизный вывод (уровень INFO, формат без микросекунд, полное подавление дампов сетевых фреймов и чанков).
+     - `dev_mode = true` сохраняет микросекундную трассировку уровня TRACE для глубокой отладки.
+  5. Документация развертывания:
+     - Руководство по развертыванию и администрированию `docs/DEPLOYMENT.md`.
+     - Системные юниты `systemd` в `scripts/systemd/`.
+     - Обновлены `README.md` и devblog.
+* **Критерий завершения (DoD):** Чистая установка из дистрибутива в изолированном окружении, все модули и точки входа проверены, 100% тестов пройдены, Ruff и Mypy 100% чистые. Отчет `devblog/phase_07_release.md`.
 
 ---
 

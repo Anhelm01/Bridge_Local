@@ -5,12 +5,12 @@
 
 [![CI](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml/badge.svg)](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.14-00D2FF.svg)
-![Tests](https://img.shields.io/badge/tests-286%20passed-00FF66.svg)
+![Tests](https://img.shields.io/badge/tests-311%20passed-00FF66.svg)
 ![Mypy](https://img.shields.io/badge/mypy-strict-7D8590.svg)
 ![Ruff](https://img.shields.io/badge/code%20style-ruff-black.svg)
 ![Architecture](https://img.shields.io/badge/architecture-modular%20platform-blue.svg)
 
-> **Status:** Phase 6 Complete & Hardened [OK] | 286 tests passing (100% green) | Resumable Transfers & Self-Healing ready.
+> **Status:** Phase 7 Complete & Deployed [OK] | 311 tests passing (100% green) | Wheel Packaging & Windows SCM Service Ready.
 
 ---
 
@@ -114,6 +114,33 @@ bridge-agent drop <file_or_dir>      # CLI drop helper
 
 ---
 
+## Packaging & Production Deployment
+
+For complete, step-by-step production setup, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+### 1. Linux Client Installation
+```bash
+# Option A: Isolated user-level CLI tool via uv (recommended):
+uv tool install .
+
+# Option B: Install from built wheel:
+pip install dist/bridge_local-0.1.0-py3-none-any.whl
+```
+
+### 2. Windows Agent & SCM Service Deployment
+```powershell
+# Automated installation: SCM registration, Defender exclusions, Search Indexing disabling, Firewall rule:
+powershell -ExecutionPolicy Bypass -File .\scripts\install-service.ps1 -Port 9732
+
+# Verify service status:
+Get-Service -Name BridgeLocalAgent
+
+# Graceful uninstallation and cleanup:
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-service.ps1
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -124,17 +151,23 @@ Bridge_Local/
 │   ├── bridge_agent_win/   # Windows service daemon, PowerShell runner, process killer, context menu
 │   ├── bridge_client_linux/# Linux CLI client & TUI (Human + agy_cli headless engine)
 │   └── bridge_local/       # Main CLI entrypoint (bridge-cli = bridge_local:main)
+├── scripts/                # Production deployment and service administration scripts
+│   ├── install-service.ps1 # Automated Windows SCM service installation & hardening
+│   ├── uninstall-service.ps1 # Graceful SCM service teardown & rule cleanup
+│   ├── build-windows-agent.ps1 # PyInstaller standalone EXE builder
+│   └── systemd/            # Linux systemd service unit templates
 ├── tests/
-│   ├── unit/               # Unit and edge-case tests (262 tests)
+│   ├── unit/               # Unit, packaging, and edge-case tests
 │   ├── integration/        # Full end-to-end multi-layer tests over TCP loopback
 │   └── mocks/              # Mock fixtures for standalone Linux development
 ├── devblog/                # Engineering reports per phase
-├── docs/                   # SDLC plan, architecture, deployment guides
+├── docs/                   # SDLC plan, architecture, deployment guides (DEPLOYMENT.md)
 ├── ref/
 │   ├── Hum/                # Human references (concepts, notes, scripts)
 │   └── AI/                 # AI architectural proposals, analyses, logo concepts
+├── bridge-agent.spec       # PyInstaller standalone executable specification
 ├── .github/workflows/      # Cross-platform GitHub Actions CI (Ubuntu + Windows)
-└── pyproject.toml          # uv project configuration
+└── pyproject.toml          # uv project configuration & wheel build backend
 ```
 
 ---
@@ -143,9 +176,9 @@ Bridge_Local/
 
 ```bash
 # Install dependencies
-uv sync --extra dev --extra linux
+uv sync --all-extras
 
-# Run full test suite (272 tests)
+# Run full test suite
 LD_PRELOAD="" uv run pytest
 
 # Check code formatting and linter
@@ -170,3 +203,5 @@ Follow the step-by-step development journey, technical decisions, and solved cha
 - [Phase 5: Linux Client CLI & TUI](devblog/phase_05_linux_cli.md)
 - [QA Audit: Addams Family Stress & Fuzzing](devblog/qa_adam_family_audit.md)
 - [Phase 6: Resilience & Self-Healing](devblog/phase_06_resilience.md)
+- [Phase 7: Packaging, SCM Service & Deployment](devblog/phase_07_release.md)
+

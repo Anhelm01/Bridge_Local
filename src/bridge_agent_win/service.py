@@ -17,10 +17,34 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import logging
+import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+try:
+    import servicemanager
+    import win32event
+    import win32service
+    import win32serviceutil
+
+    HAS_WIN32SERVICE = True
+    _BaseServiceFramework = win32serviceutil.ServiceFramework
+except ImportError:
+    HAS_WIN32SERVICE = False
+
+    class _BaseServiceFramework:  # type: ignore[no-redef]
+        """Базовый заглушечный класс при отсутствии pywin32 (например, на Linux)."""
+
+        def __init__(self, args: list[str]) -> None:
+            self.args = args
+
+        def ReportServiceStatus(self, status: int) -> None:  # noqa: N802
+            pass
+
 
 from bridge_agent_win.executor import PowerShellExecutor
 from bridge_core.config import BridgeConfig
@@ -90,7 +114,11 @@ class WindowsBridgeService:
         # Каталог для кармана и аудит-логов
         pocket_dir = Path(self.config.pocket.path)
         logs_dir = pocket_dir / self.config.pocket.logs_subdir
-        self.audit_logger = AtomicJsonlLogger(logs_dir=logs_dir, auto_fsync=True)
+        self.audit_logger = AtomicJsonlLogger(
+            logs_dir=logs_dir,
+            auto_fsync=True,
+            dev_logging=self.config.logging.dev_mode,
+        )
 
         # Менеджер файлов кармана
         self.pocket_manager = PocketManager(
@@ -479,6 +507,123 @@ def main_standalone() -> None:
         asyncio.run(service.run_forever())
     except KeyboardInterrupt, SystemExit:
         logger.info("[SERVICE] Остановка по сигналу прерывания")
+
+
+class BridgeLocalAgentWindowsService(_BaseServiceFramework):  # type: ignore[misc, valid-type]
+    """
+    Системная служба Windows под управлением SCM (Service Control Manager).
+
+    Позволяет запускать агент до входа пользователя в систему и
+    обрабатывать системные сигналы остановки и перезагрузки.
+    """
+
+    _svc_name_ = "BridgeLocalAgent"
+    _svc_display_name_ = "Bridge Local Windows Daemon"
+    _svc_description_ = (
+        "Cross-platform Linux-to-Windows remote management and file synchronization service"
+    )
+    _exe_args_ = "service-run"
+
+    def __init__(self, args: list[str]) -> None:
+        super().__init__(args)
+        if HAS_WIN32SERVICE:
+            self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+        else:
+            self.hWaitStop = None
+        self._service: WindowsBridgeService | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def SvcStop(self) -> None:  # noqa: N802
+        if HAS_WIN32SERVICE:
+            self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+            if self.hWaitStop is not None:
+                win32event.SetEvent(self.hWaitStop)
+        if self._service is not None and self._loop is not None:
+            self._loop.call_soon_threadsafe(self._service._stop_event.set)
+
+    def SvcDoRun(self) -> None:  # noqa: N802
+        if HAS_WIN32SERVICE:
+            servicemanager.LogMsg(
+                servicemanager.EVENTLOG_INFORMATION_TYPE,
+                servicemanager.PYS_SERVICE_STARTED,
+                (self._svc_name_, ""),
+            )
+        self._run()
+
+    def _run(self) -> None:
+        # SCM запускает службы из C:\Windows\System32.
+        # Определяем реальный каталог установки и конфиг bridge.toml
+        exe_dir = Path(sys.executable).parent
+        candidate_paths = [
+            exe_dir / "bridge.toml",
+            Path(r"C:\BridgeLocal\bridge.toml"),
+            Path("bridge.toml"),
+        ]
+        cfg_path = None
+        for p in candidate_paths:
+            if p.exists():
+                cfg_path = p
+                break
+
+        config = BridgeConfig.load(cfg_path)
+        if cfg_path is not None and cfg_path.parent.exists():
+            with contextlib.suppress(Exception):
+                os.chdir(cfg_path.parent)
+
+        self._service = WindowsBridgeService(config)
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        async def _main_task() -> None:
+            assert self._service is not None
+            await self._service.start()
+            if HAS_WIN32SERVICE:
+                self.ReportServiceStatus(win32service.SERVICE_RUNNING)
+            while not self._service._stop_event.is_set():
+                if HAS_WIN32SERVICE and self.hWaitStop is not None:
+                    rc = await asyncio.to_thread(
+                        win32event.WaitForSingleObject, self.hWaitStop, 500
+                    )
+                    if rc == win32event.WAIT_OBJECT_0:
+                        break
+                else:
+                    await asyncio.sleep(0.5)
+
+            if HAS_WIN32SERVICE:
+                self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+            await self._service.stop()
+            if HAS_WIN32SERVICE:
+                self.ReportServiceStatus(win32service.SERVICE_STOPPED)
+
+        try:
+            self._loop.run_until_complete(_main_task())
+        except Exception as exc:
+            if HAS_WIN32SERVICE:
+                servicemanager.LogErrorMsg(f"[FAIL] BridgeLocalAgent error: {exc}")
+                self.ReportServiceStatus(win32service.SERVICE_STOPPED)
+            raise
+        finally:
+            self._loop.close()
+
+
+def run_scm_service() -> None:
+    """Запуск службы под управлением Windows SCM (Service Control Manager)."""
+    if not HAS_WIN32SERVICE:
+        print("[FAIL] pywin32 не установлен. Служба SCM недоступна.")
+        sys.exit(1)
+    servicemanager.Initialize()
+    servicemanager.PrepareToHostSingle(BridgeLocalAgentWindowsService)
+    servicemanager.StartServiceCtrlDispatcher()
+
+
+def handle_service_command(args: list[str]) -> None:
+    """Обработка команд управления системной службой Windows (win32serviceutil)."""
+    if not HAS_WIN32SERVICE:
+        print("[WARN] pywin32 не установлен. Установите: pip install pywin32")
+        return
+    # win32serviceutil.HandleCommandLine ожидает sys.argv или argv с именем скрипта в argv[0]
+    argv = [f"{sys.argv[0]} service", *args]
+    win32serviceutil.HandleCommandLine(BridgeLocalAgentWindowsService, argv=argv)
 
 
 if __name__ == "__main__":

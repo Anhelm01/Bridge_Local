@@ -10,6 +10,10 @@ requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.0",
     "watchdog>=6.0.0",
+    "typer>=0.15",
+    "rich>=14.0",
+    "psutil>=7.0",
+    "pywin32>=310; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -20,7 +24,7 @@ linux = [
 ]
 # Windows-only dependencies (agent/service)
 windows = [
-    "pywin32>=310",
+    "pywin32>=310; sys_platform == 'win32'",
     "psutil>=7.0",
 ]
 # Development tools
@@ -36,10 +40,12 @@ bridge-cli = "bridge_local:main"
 bridge-agent = "bridge_agent_win.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.12.19,<0.13.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.uv.sources]
+
+
 
 [tool.uv.workspace]
 members = []
@@ -65,7 +71,13 @@ warn_unused_configs = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = "psutil"
+module = [
+    "psutil",
+    "win32service",
+    "win32serviceutil",
+    "win32event",
+    "servicemanager",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -76,3 +88,11 @@ disable_error_code = ["attr-defined"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/bridge_core",
+    "src/bridge_agent_win",
+    "src/bridge_client_linux",
+    "src/bridge_local"
+]

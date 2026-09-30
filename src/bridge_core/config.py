@@ -9,6 +9,8 @@ tomli_w-совместимую запись через ручной сериал
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import ClassVar
@@ -193,7 +195,28 @@ class BridgeConfig(BaseModel):
         Returns:
             BridgeConfig с загруженными значениями (или значениями по умолчанию).
         """
-        config_path = path or DEFAULT_CONFIG_PATH
+        config_path = path
+        if config_path is None:
+            env_override = os.environ.get("BRIDGE_CONFIG")
+            if env_override:
+                config_path = Path(env_override)
+
+        if config_path is None:
+            candidate_paths: list[Path] = [
+                DEFAULT_CONFIG_PATH,
+                Path(sys.executable).parent / "bridge.toml",
+            ]
+            if sys.platform == "win32":
+                candidate_paths.append(Path(r"C:\BridgeLocal\bridge.toml"))
+            else:
+                candidate_paths.append(Path.home() / ".config" / "bridge-local" / "bridge.toml")
+
+            for cand in candidate_paths:
+                if cand.exists():
+                    config_path = cand
+                    break
+
+        config_path = config_path or DEFAULT_CONFIG_PATH
 
         if not config_path.exists():
             logger.info(

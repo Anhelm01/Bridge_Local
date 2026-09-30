@@ -56,9 +56,12 @@ class AtomicJsonlLogger:
     даже при внезапной перезагрузке или сбое питания.
     """
 
-    def __init__(self, logs_dir: Path | str, auto_fsync: bool = True) -> None:
+    def __init__(
+        self, logs_dir: Path | str, auto_fsync: bool = True, dev_logging: bool = True
+    ) -> None:
         self.logs_dir = Path(logs_dir)
         self.auto_fsync = auto_fsync
+        self.dev_logging = dev_logging
         self._thread_lock = threading.Lock()
         self._async_lock = asyncio.Lock()
         self.logs_dir.mkdir(parents=True, exist_ok=True)
@@ -93,13 +96,14 @@ class AtomicJsonlLogger:
         retry_with_backoff(_do_write, max_retries=5, initial_delay=0.02)
 
         elapsed_us = (time.perf_counter_ns() - t0) // 1000
-        logger.debug(
-            "[DEV-AUDIT-LOG] Записана строка аудита: method=%s, id=%s, path=%s, fsync=%d µs",
-            entry.method,
-            entry.request_id,
-            log_path.name,
-            elapsed_us,
-        )
+        if self.dev_logging and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "[DEV-AUDIT-LOG] Записана строка аудита: method=%s, id=%s, path=%s, fsync=%d µs",
+                entry.method,
+                entry.request_id,
+                log_path.name,
+                elapsed_us,
+            )
         return log_path
 
     async def write(self, entry: AuditLogEntry) -> Path:
@@ -171,7 +175,9 @@ def setup_logging(config: LoggingConfig | None = None) -> None:
     cfg = config or LoggingConfig()
 
     level_name = cfg.level.upper()
-    if level_name == "TRACE":
+    if not cfg.dev_mode and level_name == "TRACE":
+        target_level = logging.INFO
+    elif level_name == "TRACE":
         target_level = TRACE_LEVEL_NUM
     else:
         target_level = getattr(logging, level_name, logging.INFO)

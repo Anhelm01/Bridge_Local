@@ -20,16 +20,34 @@ from bridge_agent_win.context_menu import (
     save_reg_file,
     uninstall_context_menu,
 )
-from bridge_agent_win.service import main_standalone
+from bridge_agent_win.service import (
+    HAS_WIN32SERVICE,
+    handle_service_command,
+    main_standalone,
+    run_scm_service,
+)
 
 
 def main() -> None:
     """Главная точка входа bridge-agent."""
+    # Проверка запуска в качестве системной службы Windows SCM
+    if HAS_WIN32SERVICE:
+        try:
+            import servicemanager
+
+            if servicemanager.RunningAsService():
+                run_scm_service()
+                return
+        except Exception:
+            pass
+
     args = sys.argv[1:]
     if not args or args[0] in ("-h", "--help", "help"):
         print("bridge-agent — Windows Agent Management CLI")
         print("\nКоманды:")
-        print("  run                     Запуск фонового демона службы Windows")
+        print("  run                     Запуск фонового демона службы Windows (консольный режим)")
+        print("  service-run             Запуск в режиме диспетчера системной службы SCM")
+        print("  service [cmd]           Управление службой SCM (install/start/stop/remove)")
         print("  drop <file>             Отправить файл в локальный Карман")
         print("  install-context-menu    Установить пункт контекстного меню в Проводник")
         print("  uninstall-context-menu  Удалить пункт контекстного меню из Проводника")
@@ -39,6 +57,10 @@ def main() -> None:
     cmd = args[0].lower()
     if cmd == "run":
         main_standalone()
+    elif cmd in ("service-run", "scm-run"):
+        run_scm_service()
+    elif cmd == "service":
+        handle_service_command(args[1:])
     elif cmd == "drop":
         if len(args) < 2:
             print("[ERROR] Укажите путь к файлу: bridge-agent drop <file>")

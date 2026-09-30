@@ -17,7 +17,7 @@
 | **Подфаза 4.5** | UI/UX & Visual Identity | [OK] | [phase_04_5_ui_ux_identity.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_04_5_ui_ux_identity.md) | Единая тема Titanium Vivid, 2-логотипная система (Master + Industrial), анимации процессов, preview-стенд |
 | **Фаза 5** | Linux Client CLI & TUI | [OK] | [phase_05_linux_cli.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_05_linux_cli.md) | Typer CLI, Headless JSON, Exit Codes 0..5, TUI 6 режимов, 177 тестов |
 | **Фаза 6** | Отказоустойчивость | [OK] | [phase_06_resilience.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_06_resilience.md) | Докачка файлов (.part offset), Windows Sharing Violation retry, Fail-fast сон (1.5с), 286 тестов |
-| **Фаза 7** | Релиз и дистрибуция | [IN PROGRESS] *В очереди* | `phase_07_release.md` | PyInstaller standalone .exe, инсталлятор службы, чистая изоляция dev-логов |
+| **Фаза 7** | Релиз и дистрибуция | [OK] | [phase_07_release.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_07_release.md) | Wheel сборка, PyInstaller .exe, SCM служба, Defender/Firewall скрипты, 311 тестов |
 
 ---
 

@@ -1,0 +1,15 @@
+[Unit]
+Description=Bridge Local Agent — System Daemon
+Documentation=https://github.com/Anhelm01/Bridge_Local
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/bridge-agent run
+Restart=always
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

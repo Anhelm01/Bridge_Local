@@ -55,11 +55,28 @@ def kill_process_tree(pid: int, timeout_sec: float = 3.0) -> list[int]:
                 with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
                     proc.kill()
 
-            # Ожидаем завершения
-            _gone, alive = psutil.wait_procs([*children, parent], timeout=timeout_sec)
-            for proc in alive:
+            # Ожидаем завершения без перехвата os.waitpid
+            # (чтобы не ломать returncode у вызывающего Popen)
+            deadline = time.time() + timeout_sec
+            procs = [*children, parent]
+            for proc in procs:
+                while time.time() < deadline:
+                    try:
+                        if not proc.is_running() or proc.status() == getattr(
+                            psutil, "STATUS_ZOMBIE", "zombie"
+                        ):
+                            break
+                        time.sleep(0.01)
+                    except psutil.NoSuchProcess, psutil.AccessDenied:
+                        break
+
+            # Финальная зачистка: если кто-то остался жив, добиваем
+            for proc in procs:
                 with contextlib.suppress(Exception):
-                    proc.kill()
+                    if proc.is_running() and proc.status() != getattr(
+                        psutil, "STATUS_ZOMBIE", "zombie"
+                    ):
+                        proc.kill()
 
             elapsed_us = (time.perf_counter_ns() - t0) // 1000
             logger.info(

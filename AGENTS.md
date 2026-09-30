@@ -54,3 +54,7 @@
 - **Zero Two-Node Assumptions:** Code in `bridge_core`, `bridge_client_linux`, and `bridge_agent_win` must never hardcode assumptions that the topology is strictly 1:1.
 - **Explicit Addressing:** Every RPC packet carries `source_node` and `target_node`. CLI commands provide `--node / --target` overrides that default to configured target names, ensuring transparent forward-compatibility when node registries or mesh discovery are activated in future phases.
 - **Independent Package Extraction:** Packages `bridge_core`, `bridge_client_linux`, and `bridge_agent_win` must be fully independent Python packages with `py.typed` markers, clean imports, and zero circular dependencies, ready to be packaged as standalone wheels or imported into multi-agent systems.
+
+## 9. Git & Release Invariant: Explicit User Approval Only
+- **Zero Autonomous Commits, Pushes or Releases:** Agents and subagents must NEVER create git commits, push to remote repositories, create git tags, or publish releases autonomously without explicit user approval or a direct user order.
+- **Strict User Authorization Gate:** All code modifications, refactorings, and test creations during a phase remain in the local working tree until the user explicitly commands or confirms a commit and push. No background task or subagent may run `git commit` or `git push` on its own initiative.

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 
 from bridge_agent_win.process_killer import kill_process_tree
 
@@ -36,3 +37,39 @@ class TestProcessKiller:
         """Невалидный PID (<= 0) должен возвращать пустой список."""
         assert kill_process_tree(0) == []
         assert kill_process_tree(-10) == []
+
+    def test_kill_parent_and_child_tree(self) -> None:
+        """Проверяем уничтожение дерева процессов (родитель + дочерний процесс)."""
+        import psutil
+
+        # Родительский процесс запускает дочерний и ждет
+        script = (
+            "import subprocess, sys, time; "
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+            "time.sleep(60)"
+        )
+        parent_proc = subprocess.Popen([sys.executable, "-c", script])
+        parent_pid = parent_proc.pid
+
+        # Даем родителю время запустить дочерний процесс
+        child_pids: list[int] = []
+        for _ in range(50):
+            try:
+                p = psutil.Process(parent_pid)
+                children = p.children(recursive=True)
+                if children:
+                    child_pids = [c.pid for c in children]
+                    break
+            except psutil.NoSuchProcess, psutil.AccessDenied:
+                pass
+            time.sleep(0.05)
+
+        killed = kill_process_tree(parent_pid, timeout_sec=2.0)
+        assert parent_pid in killed
+        for cpid in child_pids:
+            assert cpid in killed
+
+        # Проверяем, что родитель завершился аварийно
+        ret = parent_proc.wait(timeout=2.0)
+        assert ret is not None
+        assert ret != 0
