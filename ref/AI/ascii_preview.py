@@ -19,6 +19,7 @@ TUI интерфейса и 5 цветовых палитр Bridge Local.
 
 from __future__ import annotations
 
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -71,19 +72,41 @@ OFFICIAL_THEME = PaletteTheme(
 # 2. ДВА ОФИЦИАЛЬНЫХ ЛОГОТИПА
 # ===========================================================================
 
-# 1. BRIDGES MASTER — компактный логотип для экрана приветствия (Neofetch / Splash)
-BRIDGES_MASTER = r"""         .::/XXXXXX\::.
-     .:+HMM@#- /\   /\ -#@MMH+:.
-   .=XMM@#-   /  \ /  \   -#@MMX=.
-  :dMM@#-   | | /| |\ | |   -#@MMb:
- ╔════════════════════════════════╗
- ║    B R I D G E S   L O C A L   ║
- ║     /// STRAND NETWORK ///     ║
- ╚════════════════════════════════╝
-  :dMM@#-   \  \ | /  /     -#@MMb:
-   '=XMM@#- --+---+---+--- -#@MMX='
-     ':+HMM@#-\  \|/  /-#@MMH+:'
-         '::\XXXXXX/::'"""
+# 1. BRIDGES MASTER — для полноэкранного экрана приветствия (Neofetch)
+BRIDGES_MASTER = r"""
+                           .::.
+                       .:/XXXXXX\:.
+                    .:+HMM@@@@@@MMH+:.
+                  . =XMM@##[#  #]##@MMX= .
+                . +HMM@#-         -#@MMH+ .
+              . =XMM@#-   /\   /\   -#@MMX= .
+            . :dMM@#-    /  \ /  \    -#@MMb: .
+          . :uMM@#-     / /\ V /\ \     -#@MMu: .
+       ..::[dMM@#-     | |  | |  | |     -#@MMb]::..
+     .:[u8NNMM@#-      | |  | |  | |      -#@MMNN8u]:.
+   .:[dMM@@@MM@#-      | | /| |\ | |      -#@MM@@@MMb]:.
+ .u8NNMM@#::#@MMX==.   |_|/_|_|_\|_|   .==XMM@#::#@MMNN8u.
+:dMM@#-.     .-#@MMH+-.             .-+HMM@#-.     .-#@MMb:
+\XX/-          .-\@MMX=============XMM@/-.          -\XX/
+╔═════════════════════════════════════════════════════════╗
+║  [#]     B  R  I  D  G  E  S     L  O  C  A  L     [#]  ║
+║          ///  S T R A N D   N E T W O R K  ///          ║
+╚═════════════════════════════════════════════════════════╝
+/XX\-          .-/MM@X=============XMM@\-.          -/XX\
+:dMM@#-.     .-#@MMH+-  \  \ | /  /  -+HMM@#-.     .-#@MMb:
+ 'u8NNMM@#::#@MMX==.  \  \  \|/  /  /  .==XMM@#::#@MMNN8u'
+   ':[dMM@@@MM@#-   \  \  \  |  /  /  /   -#@MM@@@MMb]:'
+     .:[u8NNMM@#- ---+---+---+---+---+--- -#@MMNN8u]:.
+       ''::[dMM@#-    \   \  |  /   /    -#@MMb]::''
+          ' :uMM@#-    \   \ | /   /    -#@MMu: '
+            ' :dMM@#- --\---+---+--/-- -#@MMb: '
+              ' =XMM@#-  \  \|/  /  -#@MMX= '
+                ' +HMM@#- \  |  / -#@MMH+ '
+                  ' =XMM@#--\+-/--#@MMX= '
+                    ' :+HMM\#|#/MMH+: '
+                       ':/XXXXXX\:'
+                           '::'
+"""
 
 
 # 2. DRAWBRIDGE INDUSTRIAL — для оперативных рабочих окон и HUD
@@ -129,7 +152,9 @@ DRAWBRIDGE_HEADER = r"""      .▄█ ││ █▄.       D R A W B R I D G E  
 
 
 def render_welcome_screen(theme: PaletteTheme) -> None:
-    """Выводит компактный экран приветствия Neofetch с BRIDGES Master и статусом."""
+    """Выводит экран приветствия Neofetch с центрированным BRIDGES Master и статусом."""
+    term_width, _ = shutil.get_terminal_size((120, 40))
+
     p = theme.primary
     s = theme.secondary
     w = theme.text
@@ -139,37 +164,83 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
     pu = theme.purple
 
     info = f"""[bold {w}]anhelm@workstation[/]
-[dim {s}]──────────────────────────────────[/]
-[bold {s}]OS:[/]       Linux ◄► Windows 11 Pro
-[bold {b}]Nodes:[/]    LINUX-HOST ◄► WIN-PC
-[bold {g}]Link:[/]     LAN · 0.38 ms [bold {g}][ONLINE][/]
-[bold {s}]Security:[/] HMAC-SHA256 Auth
-[bold {s}]Engine:[/]   JSON-RPC 2.0 (Fail-Fast 1.5s)
-[bold {a}]Pocket:[/]   18 files · 1.4 GB [bold {g}][SYNC][/]
-[bold {pu}]Notes:[/]    42 notes [bold {g}][0 unread][/]
-[bold {s}]Operator:[/] [bold {b}]agy_cli[/] (Antigravity)"""
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+[bold {s}]Host OS:[/]        Linux 6.13 (Arch Linux x86_64)
+[bold {b}]Local Node:[/]     LINUX-HOST (192.168.1.104)
+[bold {s}]Core Operator:[/]  agy_cli (Antigravity CLI Agent)
 
-    logo_text = Text(BRIDGES_MASTER, style=f"bold {p}")
-    logo_panel = Panel(
-        logo_text,
-        title=f"[bold {p}]◈ BRIDGES ◈[/]",
-        border_style=s,
-        padding=0,
-        width=38,
-    )
-    info_panel = Panel(
-        info,
-        title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС ][/]",
-        border_style=s,
-        padding=(0, 1),
-        width=40,
-    )
+[bold {pu}]Remote Node:[/]    WIN-PC (192.168.1.150:41037)
+[bold {pu}]Remote OS:[/]      Windows 11 Pro 64-bit (Build 26100)
+[bold {pu}]Remote Agent:[/]   BridgeLocalAgent [bold {g}][RUNNING][/]
 
-    grid = Table.grid()
-    grid.add_column(width=38)
-    grid.add_column(width=40)
-    grid.add_row(logo_panel, info_panel)
-    console.print(grid)
+[bold {b}]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+[bold {s}]Канал связи:[/]    P2P Direct LAN (1.0 Gbps Full Duplex)
+[bold {s}]Пинг (Latency):[/]  0.38 ms [bold {g}][STABLE LAN · OK][/]
+[bold {s}]Безопасность:[/]    HMAC-SHA256 Challenge-Response Session
+[bold {s}]Транспорт:[/]       JSON-RPC 2.0 / Length-Prefix Wire Framing
+[bold {s}]Fail-Fast:[/]       1500 ms (Мгновенное обнаружение обрыва)
+
+[bold {a}]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+[bold {s}]Карман (Pocket):[/] ~/.bridge_local/pocket/
+[bold {s}]Файлов в кармане:[/] 18 объектов (1.4 GB) [bold {g}][100% SHA-256 MATCH][/]
+[bold {s}]Заметки (Notes):[/] 42 записи [bold {g}][0 непрочитанных][/]"""
+
+    logo_raw_lines = [line for line in BRIDGES_MASTER.strip("\n").splitlines() if line]
+    max_logo_w = max(len(line) for line in logo_raw_lines)
+    panel_h = len(logo_raw_lines) + 2
+
+    if term_width >= 125:
+        w1 = term_width // 2
+        w2 = term_width - w1
+        pad = max(0, (w1 - 2 - max_logo_w) // 2)
+        centered_lines = [" " * pad + line for line in logo_raw_lines]
+        logo_text = Text("\n".join(centered_lines), style=f"bold {p}", no_wrap=True)
+
+        logo_panel = Panel(
+            logo_text,
+            title=f"[bold {p}]◈ BRIDGES MASTER EMBLEM ◈[/]",
+            subtitle=f"[dim {s}]STRAND NETWORK · LAN BACKBONE[/]",
+            border_style=s,
+            padding=0,
+            height=panel_h,
+        )
+        info_panel = Panel(
+            info,
+            title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
+            subtitle=f"[dim {b}]● THEME: {theme.name}[/]",
+            border_style=s,
+            padding=(0, 1),
+            height=panel_h,
+        )
+
+        grid = Table.grid(padding=0)
+        grid.add_column(width=w1)
+        grid.add_column(width=w2)
+        grid.add_row(logo_panel, info_panel)
+        console.print(grid)
+    else:
+        pad = max(0, (term_width - 4 - max_logo_w) // 2)
+        centered_lines = [" " * pad + line for line in logo_raw_lines]
+        logo_text = Text("\n".join(centered_lines), style=f"bold {p}", no_wrap=True)
+
+        logo_panel = Panel(
+            logo_text,
+            title=f"[bold {p}]◈ BRIDGES MASTER EMBLEM ◈[/]",
+            subtitle=f"[dim {s}]STRAND NETWORK · LAN BACKBONE[/]",
+            border_style=s,
+            padding=0,
+        )
+        info_panel = Panel(
+            info,
+            title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
+            subtitle=f"[dim {b}]● THEME: {theme.name}[/]",
+            border_style=s,
+            padding=(0, 1),
+        )
+        console.print(logo_panel)
+        console.print(info_panel)
 
 
 
@@ -785,12 +856,18 @@ def main() -> None:
         demo_process_animations(theme)
         return
     if mode == "master":
+        term_w, _ = shutil.get_terminal_size((120, 40))
+        lines = [line for line in BRIDGES_MASTER.strip("\n").splitlines() if line]
+        max_w = max(len(line) for line in lines)
+        pad = max(0, (term_w - 4 - max_w) // 2)
+        centered = [" " * pad + line for line in lines]
         console.print(
             Panel(
-                Text(BRIDGES_MASTER, style=f"bold {theme.primary}"),
+                Text("\n".join(centered), style=f"bold {theme.primary}"),
                 title=f"[bold {theme.primary}]◈ BRIDGES MASTER ◈[/]",
+                subtitle=f"[dim {theme.blue}]STRAND NETWORK · LAN BACKBONE[/]",
                 border_style=theme.secondary,
-                expand=False,
+                expand=True,
             )
         )
         return
@@ -814,13 +891,18 @@ def main() -> None:
             f"[bold {theme.primary}] 1. MASTER LOGO (BRIDGES) — ДЛЯ ПОЛНОЭКРАННОГО СТАРТА [/]"
         )
         console.print(f"[bold {theme.primary}]{sep}[/]")
+        term_w, _ = shutil.get_terminal_size((120, 40))
+        lines = [line for line in BRIDGES_MASTER.strip("\n").splitlines() if line]
+        max_w = max(len(line) for line in lines)
+        pad = max(0, (term_w - 4 - max_w) // 2)
+        centered = [" " * pad + line for line in lines]
         console.print(
             Panel(
-                Text(BRIDGES_MASTER, style=f"bold {theme.primary}"),
+                Text("\n".join(centered), style=f"bold {theme.primary}"),
                 title=f"[bold {theme.primary}]◈ BRIDGES MASTER ◈[/]",
                 subtitle=f"[dim {theme.blue}]STRAND NETWORK · LAN BACKBONE[/]",
                 border_style=theme.secondary,
-                expand=False,
+                expand=True,
             )
         )
 
