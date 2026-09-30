@@ -68,6 +68,10 @@ files = ["src"]
 module = "psutil"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "bridge_client_linux.tui.app"
+disable_error_code = ["attr-defined"]
+
 # --- Pytest Configuration ---
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -138,7 +138,7 @@ class PowerShellExecutor:
         if sys.platform != "win32":
             kwargs["preexec_fn"] = os.setsid
         else:
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
 
         proc = await asyncio.create_subprocess_exec(*cmd_args, **kwargs)  # type: ignore[arg-type]
         pid = proc.pid

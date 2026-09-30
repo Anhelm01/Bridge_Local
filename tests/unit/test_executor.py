@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -74,8 +75,10 @@ class TestPowerShellExecutor:
     @pytest.mark.asyncio
     async def test_execute_with_env_variables(self) -> None:
         executor = PowerShellExecutor(allow_posix_fallback=True)
+        is_pwsh = bool(shutil.which("powershell") or shutil.which("pwsh"))
+        cmd = "Write-Output $env:CUSTOM_VAR" if is_pwsh else "echo $CUSTOM_VAR"
         params = ExecRequestParams(
-            command="echo $CUSTOM_VAR",
+            command=cmd,
             env={"CUSTOM_VAR": "SUPER_VAL_99"},
             timeout_sec=5,
         )
