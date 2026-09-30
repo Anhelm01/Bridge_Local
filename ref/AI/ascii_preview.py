@@ -32,74 +32,40 @@ from rich.text import Text
 console = Console()
 
 # ===========================================================================
-# 1. СИСТЕМА ИЗ 5 ЦВЕТОВЫХ ПАЛИТР (THEMES)
+# 1. ЕДИНАЯ ОФИЦИАЛЬНАЯ ТЕМА BRIDGE LOCAL (TITANIUM VIVID)
 # ===========================================================================
 
 
 @dataclass(frozen=True)
 class PaletteTheme:
-    id: int
     name: str
     desc: str
-    primary: str  # Главный цвет (логотип Master, акценты, фокус)
-    secondary: str  # Вторичный цвет (логотип Industrial, сетевые шины, рамки)
-    text: str  # Основной текст
+    primary: str  # Главный цвет (логотип Master, акценты, титановый белый)
+    secondary: str  # Вторичный цвет (логотип Industrial, стальные фермы, разделители)
+    text: str  # Основной яркий белый текст
     muted: str  # Приглушенный цвет
     border: str  # Цвет контуров панелей
+    blue: str  # Электрический ультра-циан (сеть, Linux, шина, ссылки)
+    green: str  # Лазерный изумрудный (ONLINE, SYNCED, OK)
+    amber: str  # Сочный янтарно-золотой (Карман, активная передача)
+    purple: str  # Яркий неоновый фиолетовый (Windows-узел, PowerShell, Daemon)
+    red: str  # Неоновый коралловый (ошибки, оффлайн)
 
 
-PALETTES: dict[int, PaletteTheme] = {
-    1: PaletteTheme(
-        id=1,
-        name="Titanium Machined / Clean Slate",
-        desc="Холодный авиационный титан: #F0F6FC (Cold Titanium) + #8B949E (Steel Slate)",
-        primary="#F0F6FC",
-        secondary="#8B949E",
-        text="#E6EDF3",
-        muted="#484F58",
-        border="#8B949E",
-    ),
-    2: PaletteTheme(
-        id=2,
-        name="Graphite Carbon / Deep Slate",
-        desc="Матовый графит и карбон: #E2E8F0 (Frost Silver) + #64748B (Cool Slate)",
-        primary="#E2E8F0",
-        secondary="#64748B",
-        text="#F1F5F9",
-        muted="#334155",
-        border="#64748B",
-    ),
-    3: PaletteTheme(
-        id=3,
-        name="Warm Tungsten / Smoked Ash",
-        desc="Тёплый индустриальный монохром: #F5F2EB (Alabaster Bone) + #9E978E (Smoked Tungsten)",
-        primary="#F5F2EB",
-        secondary="#9E978E",
-        text="#FAF8F5",
-        muted="#524F4A",
-        border="#9E978E",
-    ),
-    4: PaletteTheme(
-        id=4,
-        name="Obsidian Tactical / Zinc Stealth",
-        desc="Предельный тактический стелс: #FFFFFF (Crisp White) + #71717A (Tactical Zinc)",
-        primary="#FFFFFF",
-        secondary="#71717A",
-        text="#FAFAFA",
-        muted="#3F3F46",
-        border="#71717A",
-    ),
-    5: PaletteTheme(
-        id=5,
-        name="Nordic Quartz / Mineral Grey",
-        desc="Скандинавский минеральный кварц: #ECEFF4 (Polar Snow) + #7E8B85 (Quartz Slate)",
-        primary="#ECEFF4",
-        secondary="#7E8B85",
-        text="#F8FAFC",
-        muted="#414C47",
-        border="#7E8B85",
-    ),
-}
+OFFICIAL_THEME = PaletteTheme(
+    name="Titanium Vivid / Cyber-Industrial",
+    desc="Единая тема: авиационный титан и сталь с ультра-яркими акцентами",
+    primary="#FFFFFF",  # Чистый лазерный белый титан
+    secondary="#7D8590",  # Холодная индустриальная сталь
+    text="#FFFFFF",  # Предельная четкость белого текста
+    muted="#6E7681",  # Читаемый приглушенный
+    border="#7D8590",  # Стальной контур
+    blue="#00D2FF",  # Электрический ультра-циан (#00D2FF)
+    green="#00FF66",  # Лазерный зеленый фосфор (#00FF66)
+    amber="#FFB800",  # Сочный янтарно-золотой (#FFB800)
+    purple="#C084FC",  # Яркий неоновый фиолетовый (#C084FC)
+    red="#FF3366",  # Неоновый коралловый (#FF3366)
+)
 
 
 # ===========================================================================
@@ -191,35 +157,39 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
     p = theme.primary
     s = theme.secondary
     w = theme.text
+    b = theme.blue
+    g = theme.green
+    a = theme.amber
+    pu = theme.purple
 
     info = f"""[bold {w}]anhelm@workstation[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
 [bold {s}]Host OS:[/]        Linux 6.13 (Arch Linux x86_64)
-[bold {s}]Local Node:[/]     LINUX-HOST (192.168.1.104)
+[bold {b}]Local Node:[/]     LINUX-HOST (192.168.1.104)
 [bold {s}]Core Operator:[/]  agy_cli (Antigravity CLI Agent)
 
-[bold {p}]Remote Node:[/]    WIN-PC (192.168.1.150:41037)
-[bold {p}]Remote OS:[/]      Windows 11 Pro 64-bit (Build 26100)
-[bold {p}]Remote Agent:[/]   BridgeLocalAgent [bold green][RUNNING][/]
+[bold {pu}]Remote Node:[/]    WIN-PC (192.168.1.150:41037)
+[bold {pu}]Remote OS:[/]      Windows 11 Pro 64-bit (Build 26100)
+[bold {pu}]Remote Agent:[/]   BridgeLocalAgent [bold {g}][RUNNING][/]
 
-[bold {w}]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
+[bold {b}]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
 [bold {s}]Канал связи:[/]    P2P Direct LAN (1.0 Gbps Full Duplex)
-[bold {s}]Пинг (Latency):[/]  0.38 ms [bold green][STABLE LAN · OK][/]
+[bold {s}]Пинг (Latency):[/]  0.38 ms [bold {g}][STABLE LAN · OK][/]
 [bold {s}]Безопасность:[/]    HMAC-SHA256 Challenge-Response Session
 [bold {s}]Транспорт:[/]       JSON-RPC 2.0 / Length-Prefix Wire Framing
 [bold {s}]Fail-Fast:[/]       1500 ms (Мгновенное обнаружение обрыва)
 
-[bold {w}]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
+[bold {a}]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {p}]Карман (Pocket):[/] ~/.bridge_local/pocket/
-[bold {p}]Файлов в кармане:[/] 18 объектов (1.4 GB) [bold green][100% SHA-256 MATCH][/]
-[bold {p}]Заметки (Notes):[/] 42 записи [bold green][0 непрочитанных][/]
+[bold {s}]Карман (Pocket):[/] ~/.bridge_local/pocket/
+[bold {s}]Файлов в кармане:[/] 18 объектов (1.4 GB) [bold {g}][100% SHA-256 MATCH][/]
+[bold {s}]Заметки (Notes):[/] 42 записи [bold {g}][0 непрочитанных][/]
 
-[bold {w}]РЕЖИМЫ РАБОТЫ (MODES)[/]
+[bold {b}]РЕЖИМЫ РАБОТЫ (MODES)[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
-  [bold {p}][F1][/] Дашборд   [bold {p}][F2][/] Карман   [bold {p}][F3][/] Заметки
-  [bold {p}][F4][/] Exec      [bold {p}][F5][/] Конфиг   [bold {p}][Q][/]  Выход
+  [bold {b}][F1][/] Дашборд   [bold {a}][F2][/] Карман   [bold {b}][F3][/] Заметки
+  [bold {pu}][F4][/] Exec      [bold {s}][F5][/] Конфиг   [bold {w}][Q][/]  Выход
 """
 
     logo_text = Text(BRIDGES_MASTER, style=f"bold {p}")
@@ -232,7 +202,7 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
     info_panel = Panel(
         info,
         title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
-        subtitle=f"[dim {p}]● THEME #{theme.id}: {theme.name}[/]",
+        subtitle=f"[dim {b}]● THEME #{theme.id}: {theme.name}[/]",
         border_style=s,
     )
 
@@ -253,18 +223,46 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
 
 
 def render_operational_header(theme: PaletteTheme) -> None:
-    """Шапка оперативного окна с логотипом DRAWBRIDGE Industrial."""
+    """Шапка оперативного окна с логотипом DRAWBRIDGE Industrial и яркими акцентами."""
+    header_text = Text()
+    # Строка 1
+    header_text.append("      .▄█ ││ █▄.       ", style=f"bold {theme.secondary}")
+    header_text.append("D R A W B R I D G E", style=f"bold {theme.primary}")
+    header_text.append("  ::  ", style=f"bold {theme.secondary}")
+    header_text.append("B R I D G E   L O C A L\n", style=f"bold {theme.blue}")
+    # Строка 2
+    header_text.append("     //║  ||  ║\\\\      ", style=f"bold {theme.secondary}")
+    header_text.append(
+        "/// BOTH STICK AND ROPE : TO PROTECT AND CONNECT\n",
+        style=f"dim {theme.text}",
+    )
+    # Строка 3
+    header_text.append("    //[X]║||║[X]\\\\     ", style=f"bold {theme.secondary}")
+    header_text.append("[", style="bold white")
+    header_text.append("LNX: 192.168.1.104", style=f"bold {theme.blue}")
+    header_text.append(" ◄════► ", style=f"bold {theme.amber}")
+    header_text.append("WIN: 192.168.1.150", style=f"bold {theme.purple}")
+    header_text.append("]\n", style="bold white")
+    # Строка 4
+    header_text.append("   (o)═══╝||╚═══(o)    ", style=f"bold {theme.secondary}")
+    header_text.append("STATUS: ", style="dim white")
+    header_text.append("0.38ms [OK]", style=f"bold {theme.green}")
+    header_text.append(" · POCKET: ", style="dim white")
+    header_text.append("100%", style=f"bold {theme.blue}")
+    header_text.append(" · NOTES: ", style="dim white")
+    header_text.append("0 UNREAD", style=f"bold {theme.primary}")
+
     console.print(
         Panel(
-            Text(DRAWBRIDGE_HEADER, style=f"bold {theme.secondary}"),
+            header_text,
             title=f"[bold {theme.primary}]⚓ DRAWBRIDGE INDUSTRIAL // OPERATIONAL HUB ⚓[/]",
-            border_style=theme.primary,
+            border_style=theme.secondary,
         )
     )
 
 
 def render_mode_tabs(active_mode: str, theme: PaletteTheme) -> None:
-    """Верхний таб-бар переключения режимов (без эмодзи, в 1 строку)."""
+    """Верхний таб-бар переключения режимов с яркой активной вкладкой."""
     modes = [
         ("DASH", "F1"),
         ("POCKET", "F2"),
@@ -273,11 +271,11 @@ def render_mode_tabs(active_mode: str, theme: PaletteTheme) -> None:
         ("CONFIG", "F5"),
     ]
     bar = Text()
-    bar.append(" [BRIDGE LOCAL] ", style=f"bold black on {theme.primary}")
+    bar.append(" [BRIDGE LOCAL] ", style=f"bold black on {theme.blue}")
     bar.append(" ")
     for i, (name, key) in enumerate(modes):
         if name == active_mode:
-            bar.append(f" █ {key}:{name} ", style="bold white on #282C34")
+            bar.append(f" █ {key}:{name} ", style="bold white on #1F6FEB")
         else:
             bar.append(f" {key}:{name} ", style=f"dim {theme.secondary}")
         if i < len(modes) - 1:
@@ -296,15 +294,15 @@ def render_dashboard_mode(theme: PaletteTheme) -> None:
 
     left = Panel(
         f"""[bold white]ЛОКАЛЬНАЯ ШИНА СВЯЗИ (P2P BACKBONE)[/]
-[bold {theme.secondary}]ХОСТ: LINUX (Workstation)[/]
+[bold {theme.blue}]ХОСТ: LINUX (Workstation)[/]
   |- IP: 192.168.1.104
   |- OS: Linux 6.13 (Arch Linux)
   +- Оператор: agy_cli (Antigravity Agent)
 
-[bold {theme.primary}]УЗЕЛ: WIN-PC (Service Daemon)[/]
+[bold {theme.purple}]УЗЕЛ: WIN-PC (Service Daemon)[/]
   |- IP: 192.168.1.150:41037
-  |- Статус: [bold green]ONLINE (Готов)[/]
-  |- Heartbeat: 0.38 ms [green][OK][/] (Лимит: 1500 ms)
+  |- Статус: [bold {theme.green}]ONLINE (Готов)[/]
+  |- Heartbeat: 0.38 ms [bold {theme.green}][OK][/] (Лимит: 1500 ms)
   |- CPU: 2.4% | RAM: 14.2 / 64 GB
   +- Uptime: 4d 18h 32m""",
         title="[bold white][ СЕТЕВОЙ КАНАЛ ][/]",
@@ -313,16 +311,16 @@ def render_dashboard_mode(theme: PaletteTheme) -> None:
 
     right = Panel(
         f"""[bold white]СОСТОЯНИЕ ХРАНИЛИЩА И ОЧЕРЕДЕЙ[/]
-[bold {theme.primary}]КАРМАН (Pocket Storage Engine):[/]
+[bold {theme.amber}]КАРМАН (Pocket Storage Engine):[/]
   |- Путь: ~/.bridge_local/pocket/
   |- Файлов: 18 объектов (1.4 GB)
-  |- FS Watchdog: [bold green]АКТИВЕН[/] (0.5s debounce)
-  +- Статус: [bold green][OK] 100% SHA-256 MATCH[/]
+  |- FS Watchdog: [bold {theme.green}]АКТИВЕН[/] (0.5s debounce)
+  +- Статус: [bold {theme.green}][OK] 100% SHA-256 MATCH[/]
 
-[bold {theme.secondary}]ЗАМЕТКИ (Notes Engine):[/]
+[bold {theme.blue}]ЗАМЕТКИ (Notes Engine):[/]
   |- Файл: notes.jsonl
   |- Всего записей: 42
-  +- Непрочитанных: [bold green][0] (Все прочитаны)[/]""",
+  +- Непрочитанных: [bold {theme.green}][0] (Все прочитаны)[/]""",
         title="[bold white][ ХРАНИЛИЩЕ И ОЧЕРЕДИ ][/]",
         border_style=theme.secondary,
     )
@@ -344,26 +342,38 @@ def render_pocket_mode(theme: PaletteTheme) -> None:
     )
     table.add_column("Файл / Каталог", style="bold white")
     table.add_column("Размер", style="dim white", justify="right")
-    table.add_column("Направление", style=f"bold {theme.secondary}", justify="center")
-    table.add_column("SHA-256", style="bold green", justify="center")
-    table.add_column("Активность / Статус", style=f"bold {theme.primary}")
+    table.add_column("Направление", justify="center")
+    table.add_column("SHA-256", style=f"bold {theme.green}", justify="center")
+    table.add_column("Активность / Статус")
 
     table.add_row(
-        "report_phase_04.docx", "2.4 MB", "LNX --> WIN", "[OK] d9e4f1a...", "[green]SYNCED[/]"
+        "report_phase_04.docx",
+        "2.4 MB",
+        f"[bold {theme.blue}]LNX --> WIN[/]",
+        "[OK] d9e4f1a...",
+        f"[bold {theme.green}]SYNCED[/]",
     )
     table.add_row(
-        "setup_env_win.ps1", "12.8 KB", "WIN --> LNX", "[OK] 3a7c88b...", "[green]SYNCED[/]"
+        "setup_env_win.ps1",
+        "12.8 KB",
+        f"[bold {theme.purple}]WIN --> LNX[/]",
+        "[OK] 3a7c88b...",
+        f"[bold {theme.green}]SYNCED[/]",
     )
     # Активный процесс с заметным индикатором передачи [>>>]
     table.add_row(
         "model_weights.bin",
         "1.2 GB",
-        "LNX --> WIN",
-        "[dim white][SYNC][/dim white]",
-        f"[bold {theme.primary}][>>> 68%][/] [white]48 MB/s[/]",
+        f"[bold {theme.blue}]LNX --> WIN[/]",
+        f"[bold {theme.amber}][⠋ SYNC][/]",
+        f"[bold {theme.amber}][>>> 68%][/] [bold {theme.blue}]48 MB/s[/]",
     )
     table.add_row(
-        "screenshot_crash.png", "840 KB", "WIN --> LNX", "[OK] f7a012c...", "[green]SYNCED[/]"
+        "screenshot_crash.png",
+        "840 KB",
+        f"[bold {theme.purple}]WIN --> LNX[/]",
+        "[OK] f7a012c...",
+        f"[bold {theme.green}]SYNCED[/]",
     )
 
     console.print(table)
@@ -382,19 +392,19 @@ def render_notes_mode(theme: PaletteTheme) -> None:
     grid.add_column(ratio=1)
 
     notes_feed = Panel(
-        f"""[bold {theme.secondary}][10:04:15] WIN-PC (Windows Operator):[/]
+        f"""[bold {theme.purple}][10:04:15] WIN-PC (Windows Operator):[/]
   Служба BridgeLocalAgent запущена в фоне, кодировка UTF-8 (chcp 65001) проверена.
 
-[bold {theme.primary}][10:08:22] LINUX (Antigravity agy_cli):[/]
+[bold {theme.blue}][10:08:22] LINUX (Antigravity agy_cli):[/]
   Интеграционные тесты ядра и RPC завершены успешно (146 тестов, 6.80с).
   Подготовлена передача весов модели через карман.
 
-[bold white][10:11:03] USER (Operator Note):[/]
+[bold {theme.amber}][10:11:03] USER (Operator Note):[/]
   Проверь температуру GPU на Windows перед запуском бенчмарка.
 
 [dim]─────────────────────────────────────────────────────────────────────────────[/]
 [bold white]Ввод новой заметки ([Enter] Отправить на все узлы | [Esc] Отмена):[/]
-[bold {theme.primary}]> [/][blink]_[/]""",
+[bold {theme.blue}]> [/][blink]_[/]""",
         title="[bold white][ ЖУРНАЛ ЗАМЕТОК / NOTES STREAM ][/]",
         border_style=theme.secondary,
     )
@@ -402,11 +412,11 @@ def render_notes_mode(theme: PaletteTheme) -> None:
     stats = Panel(
         f"""[bold white]СТАТИСТИКА ЗАМЕТОК[/]
 |- Всего записей: 43
-|- Непрочитанных: [bold green][0][/]
+|- Непрочитанных: [bold {theme.green}][0][/]
 |- Файл: [dim]notes.jsonl[/]
-+- Режим: [green]Append-Only (Atomic)[/]
++- Режим: [bold {theme.green}]Append-Only (Atomic)[/]
 
-[bold {theme.secondary}]ФИЛЬТРЫ:[/][dim]
+[bold {theme.blue}]ФИЛЬТРЫ:[/][dim]
  [A] Все заметки
  [U] Только новые
  [S] Поиск по тексту[/dim]""",
@@ -428,15 +438,15 @@ def render_exec_mode(theme: PaletteTheme) -> None:
         Panel(
             f"""[bold white]УДАЛЕННАЯ СЕССИЯ POWERSHELL (WIN-PC)[/]
 Кодировка: UTF-8 (chcp 65001) | Права: Elevated (Admin) | Таймаут: 30s
-Статус раннера: [bold green][READY][/] | Фоновый опрос: [bold {theme.primary}][⠼ IDLE][/]
+Статус раннера: [bold {theme.green}][READY][/] | Фоновый опрос: [bold {theme.amber}][⠼ IDLE][/]
 
-[bold {theme.secondary}]PS C:\\BridgeService> [/][white]Get-Service -Name "BridgeLocalAgent"[/]
+[bold {theme.purple}]PS C:\\BridgeService> [/][white]Get-Service -Name "BridgeLocalAgent"[/]
 
 Status   Name               DisplayName
 ------   ----               -----------
-[bold green]Running[/]  BridgeLocalAgent   Bridge Local Windows Daemon v0.4.0
+[bold {theme.green}]Running[/]  BridgeLocalAgent   Bridge Local Windows Daemon v0.4.0
 
-[bold {theme.secondary}]PS C:\\BridgeService> [/][white]Get-Process python | Select Id, WS[/]
+[bold {theme.purple}]PS C:\\BridgeService> [/][white]Get-Process python | Select Id, WS[/]
 
    Id        CPU       WS
    --        ---       --
@@ -444,7 +454,7 @@ Status   Name               DisplayName
 
 [dim]─────────────────────────────────────────────────────────────────────────────[/]
 [bold white]Ввод команды ([Enter] Выполнить на WIN-PC | [Ctrl+C] Прервать):[/]
-[bold {theme.primary}]PS C:\\BridgeService> [/] [blink]_[/]""",
+[bold {theme.blue}]PS C:\\BridgeService> [/] [blink]_[/]""",
             title="[bold white][ УДАЛЕННЫЙ ИСПОЛНИТЕЛЬ POWERSHELL / REMOTE EXEC ][/]",
             border_style=theme.secondary,
         )
@@ -460,32 +470,32 @@ def render_config_mode(theme: PaletteTheme) -> None:
     render_mode_tabs("CONFIG", theme)
 
     table = Table(title="[ РЕЕСТР УЗЛОВ И СЕТЕВЫЕ ПАРАМЕТРЫ / NODE CONFIG ]", expand=True)
-    table.add_column("Узел (Node ID)", style="bold white")
+    table.add_column("Узел (Node ID)")
     table.add_column("Роль / Назначение", style="dim white")
-    table.add_column("Сетевой Адрес", style=f"bold {theme.secondary}")
-    table.add_column("Heartbeat", style="white")
-    table.add_column("Безопасность", style="bold green")
+    table.add_column("Сетевой Адрес", style="bold white")
+    table.add_column("Heartbeat", style="dim white")
+    table.add_column("Безопасность")
 
     table.add_row(
-        "LINUX-HOST (local)",
+        f"[bold {theme.blue}]LINUX-HOST (local)[/]",
         "Workstation (Core)",
         "127.0.0.1 / 192.168.1.104",
         "1500 ms",
-        "[ACTIVE] HMAC-SHA256",
+        f"[bold {theme.green}][ACTIVE] HMAC-SHA256[/]",
     )
     table.add_row(
-        "WIN-PC (remote)",
+        f"[bold {theme.purple}]WIN-PC (remote)[/]",
         "Worker Agent",
         "192.168.1.150:41037",
         "1500 ms",
-        "[ACTIVE] HMAC-SHA256",
+        f"[bold {theme.green}][ACTIVE] HMAC-SHA256[/]",
     )
     table.add_row(
-        "NODE-MACBOOK (future)",
+        f"[dim {theme.secondary}]NODE-MACBOOK (future)[/]",
         "Mobile Node (mesh)",
         "192.168.1.112:41037",
         "3000 ms",
-        "[dim][OFFLINE][/dim]",
+        f"[dim {theme.red}][OFFLINE][/]",
     )
 
     console.print(table)
@@ -522,13 +532,13 @@ def demo_process_animations(theme: PaletteTheme) -> None:
         p = pulses[step % len(pulses)]
 
         line = Text()
-        line.append(f"  [{s}] ", style=f"bold {theme.primary}")
+        line.append(f"  [{s}] ", style=f"bold {theme.blue}")
         line.append("Pocket Sync: ", style="bold white")
         line.append("model_weights.bin ", style="dim white")
-        line.append(f"{p} ", style=f"bold {theme.primary}")
-        line.append(f"68% ({45 + (step % 5)} MB/s) ", style=f"bold {theme.secondary}")
+        line.append(f"{p} ", style=f"bold {theme.amber}")
+        line.append(f"68% ({45 + (step % 5)} MB/s) ", style=f"bold {theme.blue}")
         line.append(" | Heartbeat probe: ", style="dim")
-        line.append("0.38ms [OK] ", style="bold green")
+        line.append("0.38ms [OK] ", style=f"bold {theme.green}")
 
         sys.stdout.write("\r" + line.plain)
         sys.stdout.flush()
@@ -538,34 +548,59 @@ def demo_process_animations(theme: PaletteTheme) -> None:
     sys.stdout.flush()
 
 
-def render_palettes_table() -> None:
-    """Выводит сравнительную таблицу всех 5 нейтральных монохромных тем."""
+def render_theme_spec(theme: PaletteTheme) -> None:
+    """Выводит спецификацию единой утвержденной темы."""
     table = Table(
-        title="🎨 5 НЕЙТРАЛЬНЫХ МОНОХРОМНЫХ ПАЛИТР (Выбор: all 1 .. all 5)", expand=True
+        title="◈ УТВЕРЖДЕННАЯ ТЕМА BRIDGE LOCAL: TITANIUM VIVID ◈",
+        expand=True,
     )
-    table.add_column("№", style="bold white", width=4)
-    table.add_column("Название темы", style="bold", width=34)
-    table.add_column("Primary (Светлый титан)", width=24)
-    table.add_column("Secondary (Сталь/Рамка)", width=24)
-    table.add_column("Пример плашки", width=22)
+    table.add_column("Роль в интерфейсе", style="bold white", width=28)
+    table.add_column("Цветовой код", width=18)
+    table.add_column("Визуальный образец", width=36)
 
-    for p_id, p in PALETTES.items():
-        preview = Text()
-        preview.append(" [BRIDGE] ", style=f"bold black on {p.primary}")
-        preview.append(" ")
-        preview.append("[OK]", style="bold green")
-        preview.append(" 0.38ms", style=f"bold {p.secondary}")
+    chips = [
+        (
+            "Primary (Титан / Master)",
+            theme.primary,
+            Text("████████ [BRIDGE MASTER]", style=f"bold {theme.primary}"),
+        ),
+        (
+            "Secondary (Сталь / Фреймы)",
+            theme.secondary,
+            Text("████████ [DRAWBRIDGE]", style=f"bold {theme.secondary}"),
+        ),
+        (
+            "Blue (Электро-циан / Сеть)",
+            theme.blue,
+            Text("████████ [LNX: 192.168.1.104]", style=f"bold {theme.blue}"),
+        ),
+        (
+            "Green (Лазерный фосфор / OK)",
+            theme.green,
+            Text("████████ [ONLINE · 0.38ms OK]", style=f"bold {theme.green}"),
+        ),
+        (
+            "Amber (Сочное золото / Sync)",
+            theme.amber,
+            Text("████████ [>>> 68% SYNC]", style=f"bold {theme.amber}"),
+        ),
+        (
+            "Purple (Неоновый фиолетовый)",
+            theme.purple,
+            Text("████████ [WIN-PC · PowerShell]", style=f"bold {theme.purple}"),
+        ),
+        (
+            "Red (Неоновый коралловый)",
+            theme.red,
+            Text("████████ [OFFLINE / ERROR]", style=f"bold {theme.red}"),
+        ),
+    ]
 
-        table.add_row(
-            str(p_id),
-            p.name,
-            Text(f"● {p.primary}", style=f"bold {p.primary}"),
-            Text(f"● {p.secondary}", style=f"bold {p.secondary}"),
-            preview,
-        )
+    for role, code, preview in chips:
+        table.add_row(role, Text(code, style="bold white"), preview)
 
     console.print(table)
-    console.print("\n[dim]Выбор палитры: uv run python ref/AI/preview.py all [1-5][/dim]\n")
+    console.print(f"\n[dim]{theme.desc}[/dim]\n")
 
 
 # ===========================================================================
@@ -573,11 +608,8 @@ def render_palettes_table() -> None:
 # ===========================================================================
 
 
-def resolve_args(argv: list[str]) -> tuple[str, PaletteTheme]:
-    """Парсит аргументы командной строки вида [mode] [palette_number]."""
-    mode = "all"
-    palette_id = 1  # По умолчанию: #1 (Acid Cyber из буфера)
-
+def resolve_args(argv: list[str]) -> str:
+    """Парсит аргументы командной строки вида [mode]."""
     valid_modes = (
         "welcome",
         "neofetch",
@@ -585,30 +617,28 @@ def resolve_args(argv: list[str]) -> tuple[str, PaletteTheme]:
         "industrial",
         "master",
         "anim",
-        "palettes",
+        "theme",
+        "spec",
         "all",
     )
     for a in argv:
-        if a.isdigit() and int(a) in PALETTES:
-            palette_id = int(a)
-        elif a.lower() in valid_modes:
-            mode = a.lower()
-
-    return mode, PALETTES[palette_id]
+        if a.lower() in valid_modes:
+            return a.lower()
+    return "all"
 
 
 def main() -> None:
-    raw_args = sys.argv[1:]
-    mode, theme = resolve_args(raw_args)
+    mode = resolve_args(sys.argv[1:])
+    theme = OFFICIAL_THEME
 
     sep = "═" * 70
 
-    if mode == "palettes":
-        render_palettes_table()
+    if mode in ("theme", "spec"):
+        render_theme_spec(theme)
         return
 
-    console.print(f"\n[bold {theme.primary}]◈ ПАЛИТРА #{theme.id}: {theme.name.upper()} ◈[/]")
-    console.print(f"[dim {theme.secondary}]{theme.desc}[/]\n")
+    console.print(f"\n[bold {theme.primary}]◈ {theme.name.upper()} ◈[/]")
+    console.print(f"[dim {theme.blue}]{theme.desc}[/]\n")
 
     if mode in ("all", "master"):
         console.print(f"[bold {theme.primary}]{sep}[/]")
@@ -620,7 +650,7 @@ def main() -> None:
             Panel(
                 Text(BRIDGES_MASTER, style=f"bold {theme.primary}"),
                 title=f"[bold {theme.primary}]◈ BRIDGES MASTER ◈[/]",
-                subtitle=f"[dim {theme.secondary}]STRAND NETWORK · LAN BACKBONE[/]",
+                subtitle=f"[dim {theme.blue}]STRAND NETWORK · LAN BACKBONE[/]",
                 border_style=theme.secondary,
                 expand=False,
             )
@@ -637,7 +667,7 @@ def main() -> None:
                 Text(DRAWBRIDGE_INDUSTRIAL, style=f"bold {theme.secondary}"),
                 title=f"[bold {theme.primary}]⚓ DRAWBRIDGE INDUSTRIAL ⚓[/]",
                 subtitle="[dim white]BOTH STICK AND ROPE : TO PROTECT AND CONNECT[/]",
-                border_style=theme.primary,
+                border_style=theme.blue,
                 expand=False,
             )
         )
@@ -645,14 +675,16 @@ def main() -> None:
     if mode in ("all", "welcome", "neofetch"):
         console.print(f"\n[bold white]{sep}[/]")
         console.print(
-            f"[bold white] 3. ЭКРАН ПРИВЕТСТВИЯ В СТИЛЕ NEOFETCH (ПАЛИТРА #{theme.id}) [/]"
+            "[bold white] 3. ЭКРАН ПРИВЕТСТВИЯ В СТИЛЕ NEOFETCH (FULL SCREEN) [/]"
         )
         console.print(f"[bold white]{sep}[/]\n")
         render_welcome_screen(theme)
 
     if mode in ("all", "modes"):
         console.print(f"\n[bold white]{sep}[/]")
-        console.print(f"[bold white] 4. ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (5 РЕЖИМОВ, ПАЛИТРА #{theme.id}) [/]")
+        console.print(
+            "[bold white] 4. ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (5 РЕЖИМОВ С ШАПКОЙ DRAWBRIDGE) [/]"
+        )
         console.print(f"[bold white]{sep}[/]\n")
         render_dashboard_mode(theme)
         render_pocket_mode(theme)
@@ -661,6 +693,9 @@ def main() -> None:
         render_config_mode(theme)
 
     if mode in ("all", "anim"):
+        console.print(f"\n[bold white]{sep}[/]")
+        console.print("[bold white] 5. АНИМАЦИИ В РАБОЧИХ ПРОЦЕССАХ (AT-A-GLANCE) [/]")
+        console.print(f"[bold white]{sep}[/]")
         demo_process_animations(theme)
 
 

@@ -1,9 +1,11 @@
 """
 ref/AI/preview.py — Удобный алиас для ref/AI/ascii_preview.py.
 Позволяет вызывать:
-  uv run python ref/AI/preview.py all 1
-  uv run python ref/AI/preview.py all 2
-  uv run python ref/AI/preview.py welcome 1
+  uv run python ref/AI/preview.py all
+  uv run python ref/AI/preview.py welcome
+  uv run python ref/AI/preview.py modes
+  uv run python ref/AI/preview.py anim
+  uv run python ref/AI/preview.py spec
 """
 
 from __future__ import annotations
