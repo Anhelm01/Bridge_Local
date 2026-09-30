@@ -35,3 +35,10 @@
   - Outputs must be token-efficient to minimize LLM context consumption for lightweight models.
 - **Future-Proof Extensibility (Multi-Node & Inter-Agent):**
   - All protocol envelopes and DTO models must reserve optional `source_node` and `target_node` fields so that 3+ node mesh routing and Linux `agy_cli` ↔ Windows `agy_cli` cross-account orchestration can be introduced without breaking wire compatibility.
+
+## 7. Terminal UX & Process Activity Animation (At-a-Glance Observability)
+- **Minimal, Non-Intrusive In-Progress Animations:**
+  - All background operations, active file synchronizations in the pocket, RPC heartbeat probes, and remote PowerShell executions MUST implement minimal, elegant terminal animations (e.g., braille spinners `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, activity pulse `[>>>]`, or localized progress glyphs).
+  - **Operator Goal:** The human operator must be able to glance at the terminal screen from a distance and immediately understand what is actively working, transferring, or waiting, vs what is idle, synced, or errored, without having to read every single line of text or log status.
+  - **Zero Flicker Standard:** Terminal animations must be strictly localized to designated glyph placeholders without redrawing the entire screen or causing cursor jump artifacts.
+  - **Headless Cleanliness:** When running with `--json` or non-interactive stdout (e.g., invoked by `agy_cli`), all spinner loops and animation escapes must be completely omitted.
