@@ -202,7 +202,7 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
     info_panel = Panel(
         info,
         title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
-        subtitle=f"[dim {b}]● THEME #{theme.id}: {theme.name}[/]",
+        subtitle=f"[dim {b}]● THEME: {theme.name}[/]",
         border_style=s,
     )
 
@@ -269,9 +269,10 @@ def render_mode_tabs(active_mode: str, theme: PaletteTheme) -> None:
         ("NOTES", "F3"),
         ("EXEC", "F4"),
         ("CONFIG", "F5"),
+        ("DEV", "F6"),
     ]
     bar = Text()
-    bar.append(" [BRIDGE LOCAL] ", style=f"bold black on {theme.blue}")
+    bar.append(" [BRIDGE] ", style=f"bold black on {theme.blue}")
     bar.append(" ")
     for i, (name, key) in enumerate(modes):
         if name == active_mode:
@@ -500,7 +501,64 @@ def render_config_mode(theme: PaletteTheme) -> None:
 
     console.print(table)
     console.print(
-        "[dim]Горячие клавиши: [A] Добавить | [E] Изменить | [T] Пинг | [F1..F5] Режимы[/dim]\n"
+        "[dim]Горячие клавиши: [A] Добавить | [E] Изменить | [T] Пинг | [F1..F6] Режимы[/dim]\n"
+    )
+
+
+def render_dev_mode(theme: PaletteTheme) -> None:
+    """Режим 6: DEV / LOGS — Трассировка ядра и логов (F6)."""
+    render_operational_header(theme)
+    render_mode_tabs("DEV", theme)
+
+    grid = Table.grid(expand=True)
+    grid.add_column(ratio=3)
+    grid.add_column(ratio=1)
+
+    b, g, p, a = theme.blue, theme.green, theme.purple, theme.amber
+    logs_content = "\n".join(
+        [
+            "[bold white]ЖУРНАЛ ДИАГНОСТИКИ DEV-MODE (JSON-RPC + WIRE + PROXY)[/]",
+            f"[dim]11:50:12.104[/] [bold {b}][WIRE][/]   len=184 crc=0x9A4F [bold {g}][OK][/]",
+            f"[dim]11:50:12.106[/] [bold {p}][RPC][/]    id=199 ping=0.38ms [bold {g}][OK][/]",
+            f"[dim]11:50:12.150[/] [bold {g}][PROXY][/]  bypass proxychains [bold {g}][OK][/]",
+            f"[dim]11:50:12.210[/] [bold {a}][FS][/]     debounce=0.5s event=modify",
+            f"[dim]11:50:12.280[/] [bold {a}][POCKET][/] chunk 19/20 64KB [bold {g}][SYNC][/]",
+            f"[dim]11:50:12.350[/] [bold {p}][PROC][/]   PowerShell PID=4912 exit=0",
+            f"[dim]11:50:12.420[/] [bold {g}][HEART][/]  rtt=0.38ms [bold {g}][HEALTHY][/]",
+            "[dim]───────────────────────────────────────────────────────────────────[/]",
+            "[bold white]Фильтры: [T] TRACE | [D] DEBUG | [I] INFO | [C] Clean | [P] Pause[/]",
+            f"[bold {b}]DEV TRACE > [/][bold {g}]STREAMING ACTIVE[/] [blink]●[/]",
+        ]
+    )
+    logs_feed = Panel(
+        logs_content,
+        title="[bold white][ ДИАГНОСТИЧЕСКАЯ ТРАССИРОВКА / HYPER-LOGGING STREAM ][/]",
+        border_style=theme.blue,
+    )
+
+    stats = Panel(
+        f"""[bold white]СОСТОЯНИЕ ЛОГГЕРА[/]
+|- Уровень: [bold {theme.amber}]TRACE (Hyper)[/]
+|- JSONL: [bold {theme.green}]АКТИВЕН[/]
+|- Файл: [dim]logs/2026-09-30.jsonl[/]
+|- Буфер: [bold white]4,812 / 10k[/]
+|- Память: [dim]3.4 MB[/]
++- Proxy Guard: [bold {theme.green}][PASS][/]
+
+[bold {theme.blue}]ПОДСИСТЕМЫ:[/][dim]
+ [W] Wire Protocol
+ [R] JSON-RPC
+ [F] Pocket Watchdog
+ [P] PowerShell Runner
+ [H] Heartbeat Probe[/dim]""",
+        title="[bold white][ СТАТУС DEV-MODE ][/]",
+        border_style=theme.secondary,
+    )
+
+    grid.add_row(logs_feed, stats)
+    console.print(grid)
+    console.print(
+        "[dim]Горячие клавиши: [1..6 / F1..F6] Режимы | [C] Clean | [P] Pause | [Q] Exit[/dim]\n"
     )
 
 
@@ -604,12 +662,123 @@ def render_theme_spec(theme: PaletteTheme) -> None:
 
 
 # ===========================================================================
-# 6. ТОЧКА ВХОДА И ДИСПЕТЧЕР КОМАНД
+# 6. ИНТЕРАКТИВНЫЙ TUI МАКЕТ И ДИСПЕТЧЕР КОМАНД
 # ===========================================================================
+
+
+def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
+    """Обрабатывает нажатую клавишу и возвращает (новый_режим, продолжать_ли_цикл)."""
+    k = key.lower()
+    if k in ("q", "\x03", "\x1b", "quit", "exit"):
+        return current_mode, False
+    if k in ("1", "f1", "\x1bop", "dash"):
+        return "DASH", True
+    if k in ("2", "f2", "\x1boq", "pocket"):
+        return "POCKET", True
+    if k in ("3", "f3", "\x1bor", "notes"):
+        return "NOTES", True
+    if k in ("4", "f4", "\x1bos", "exec"):
+        return "EXEC", True
+    if k in ("5", "f5", "\x1b[15~", "config"):
+        return "CONFIG", True
+    if k in ("6", "f6", "\x1b[17~", "dev", "logs"):
+        return "DEV", True
+    if k in ("w", "welcome", "splash"):
+        return "WELCOME", True
+    if k in ("a", "anim"):
+        return "ANIM", True
+    if k in ("\t",):
+        order = ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV"]
+        if current_mode in order:
+            nxt = order[(order.index(current_mode) + 1) % len(order)]
+            return nxt, True
+        return "DASH", True
+    return current_mode, True
+
+
+def render_current_mode(mode: str, theme: PaletteTheme) -> None:
+    """Отрисовывает один выбранный режим интерфейса."""
+    if mode == "DASH":
+        render_dashboard_mode(theme)
+    elif mode == "POCKET":
+        render_pocket_mode(theme)
+    elif mode == "NOTES":
+        render_notes_mode(theme)
+    elif mode == "EXEC":
+        render_exec_mode(theme)
+    elif mode == "CONFIG":
+        render_config_mode(theme)
+    elif mode == "DEV":
+        render_dev_mode(theme)
+    elif mode == "WELCOME":
+        render_welcome_screen(theme)
+    elif mode == "ANIM":
+        demo_process_animations(theme)
+    else:
+        render_dashboard_mode(theme)
+
+
+def interactive_tui_loop(theme: PaletteTheme) -> None:
+    """Интерактивный TUI-макет: переключение вкладок по нажатию клавиш [1..6], [W], [A], [Q]."""
+    if not sys.stdin.isatty():
+        render_dashboard_mode(theme)
+        return
+
+    import select
+    import termios
+    import tty
+
+    current_mode = "DASH"
+
+    while True:
+        console.clear()
+        console.print(
+            f"[bold {theme.blue}]◈ ИНТЕРАКТИВНЫЙ МАКЕТ BRIDGE LOCAL ◈[/] "
+            f"[dim](Нажмите [1..6] / [F1..F6] для переключения, [Q] для выхода)[/]\n"
+        )
+        render_current_mode(current_mode, theme)
+        console.print(
+            Panel(
+                f"[bold white]Навигация:[/] [bold {theme.blue}][1] DASH[/]  "
+                f"[bold {theme.amber}][2] POCKET[/]  "
+                f"[bold {theme.blue}][3] NOTES[/]  "
+                f"[bold {theme.purple}][4] EXEC[/]  "
+                f"[bold white][5] CONFIG[/]  "
+                f"[bold {theme.green}][6] DEV-LOGS[/]  "
+                f"|  [bold {theme.primary}][W] Splash[/]  "
+                f"[bold {theme.amber}][A] Анимация[/]  "
+                f"[bold {theme.red}][Q] Выход[/]",
+                border_style=theme.secondary,
+            )
+        )
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            if ch == "\x1b":
+                r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if r:
+                    ch += sys.stdin.read(1)
+                    r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                    if r:
+                        ch += sys.stdin.read(3)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        current_mode, keep_going = handle_key_action(ch, current_mode)
+        if not keep_going:
+            console.clear()
+            console.print(f"[bold {theme.green}][OK] Интерактивный сеанс завершен.[/]")
+            break
 
 
 def resolve_args(argv: list[str]) -> str:
     """Парсит аргументы командной строки вида [mode]."""
+    if not argv:
+        return "interactive" if sys.stdin.isatty() else "all"
+
     valid_modes = (
         "welcome",
         "neofetch",
@@ -619,6 +788,15 @@ def resolve_args(argv: list[str]) -> str:
         "anim",
         "theme",
         "spec",
+        "dash",
+        "pocket",
+        "notes",
+        "exec",
+        "config",
+        "dev",
+        "logs",
+        "interactive",
+        "tui",
         "all",
     )
     for a in argv:
@@ -631,10 +809,33 @@ def main() -> None:
     mode = resolve_args(sys.argv[1:])
     theme = OFFICIAL_THEME
 
+    if mode in ("interactive", "tui"):
+        interactive_tui_loop(theme)
+        return
+
     sep = "═" * 70
 
     if mode in ("theme", "spec"):
         render_theme_spec(theme)
+        return
+
+    if mode == "dash":
+        render_dashboard_mode(theme)
+        return
+    if mode == "pocket":
+        render_pocket_mode(theme)
+        return
+    if mode == "notes":
+        render_notes_mode(theme)
+        return
+    if mode == "exec":
+        render_exec_mode(theme)
+        return
+    if mode == "config":
+        render_config_mode(theme)
+        return
+    if mode in ("dev", "logs"):
+        render_dev_mode(theme)
         return
 
     console.print(f"\n[bold {theme.primary}]◈ {theme.name.upper()} ◈[/]")
@@ -674,23 +875,20 @@ def main() -> None:
 
     if mode in ("all", "welcome", "neofetch"):
         console.print(f"\n[bold white]{sep}[/]")
-        console.print(
-            "[bold white] 3. ЭКРАН ПРИВЕТСТВИЯ В СТИЛЕ NEOFETCH (FULL SCREEN) [/]"
-        )
+        console.print("[bold white] 3. ЭКРАН ПРИВЕТСТВИЯ В СТИЛЕ NEOFETCH (FULL SCREEN) [/]")
         console.print(f"[bold white]{sep}[/]\n")
         render_welcome_screen(theme)
 
     if mode in ("all", "modes"):
         console.print(f"\n[bold white]{sep}[/]")
-        console.print(
-            "[bold white] 4. ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (5 РЕЖИМОВ С ШАПКОЙ DRAWBRIDGE) [/]"
-        )
+        console.print("[bold white] 4. ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (6 РЕЖИМОВ С ШАПКОЙ DRAWBRIDGE) [/]")
         console.print(f"[bold white]{sep}[/]\n")
         render_dashboard_mode(theme)
         render_pocket_mode(theme)
         render_notes_mode(theme)
         render_exec_mode(theme)
         render_config_mode(theme)
+        render_dev_mode(theme)
 
     if mode in ("all", "anim"):
         console.print(f"\n[bold white]{sep}[/]")
