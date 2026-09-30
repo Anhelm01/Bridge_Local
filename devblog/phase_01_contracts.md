@@ -2,7 +2,7 @@
 
 > **Дата:** 2026-09-30  
 > **Фаза:** 1 — Спецификация контрактов (Wire Protocol, Data Models, Config)  
-> **Статус:** ✅ Завершена  
+> **Статус:** [OK] Завершена  
 > **Git commit:** `19d160f` — Phase 1: Pydantic V2 DTO contracts, TOML config, JSON-RPC models, 58 tests  
 
 ---

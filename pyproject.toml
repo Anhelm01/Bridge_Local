@@ -62,14 +62,11 @@ python_version = "3.14"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+files = ["src"]
 
 [[tool.mypy.overrides]]
 module = "psutil"
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["tests", "tests.*"]
-ignore_errors = true
 
 # --- Pytest Configuration ---
 [tool.pytest.ini_options]

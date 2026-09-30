@@ -231,6 +231,7 @@ from rich.text import Text
 
 console = Console()
 
+
 def render_strand_banner(compact: bool = False) -> None:
     """Отрисовка баннера в стиле 'Strand Network' (Concept 1)."""
     if compact or console.width < 75:
@@ -261,6 +262,7 @@ def render_strand_banner(compact: bool = False) -> None:
                   [dim #56B6C2]/// STRAND PROTOCOL · LAN UMBILICAL ///[/]"""
     console.print(Panel(art, border_style="#0A192F", expand=False))
 
+
 def render_hazard_cli_line() -> None:
     """Сверхбыстрый однострочник для headless CLI (Concept 4)."""
     text = Text()
@@ -278,10 +280,10 @@ def render_hazard_cli_line() -> None:
 
 | Критерий | Концепт 1: Strand Network | Концепт 2: Heavy Drawbridge | Концепт 3: Chiral HUD | Концепт 4: Minimal Hazard |
 | :--- | :---: | :---: | :---: | :---: |
-| **Аутентичность Death Stranding** | ★★★★★ | ★★★★☆ | ★★★★★ | ★★★☆☆ |
-| **Информативность (TUI)** | ★★★☆☆ | ★★★☆☆ | ★★★★★ | ★★★☆☆ |
-| **Компактность в CLI / AI Headless** | ★★★☆☆ | ★★☆☆☆ | ★★★☆☆ | ★★★★★ |
-| **Простота рендеринга на любых шрифтах** | ★★★★☆ | ★★★☆☆ | ★★★★☆ | ★★★★★ |
+| **Аутентичность Death Stranding** |  |  |  |  |
+| **Информативность (TUI)** |  |  |  |  |
+| **Компактность в CLI / AI Headless** |  |  |  |  |
+| **Простота рендеринга на любых шрифтах** |  |  |  |  |
 | **Эмоциональный отклик** | Высокий (Связь) | Высокий (Сила) | Высокий (Hi-Tech) | Практичный (Industrial) |
 
 ### Рекомендация по внедрению (Гибридный подход):

@@ -243,7 +243,6 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
         console.print(info_panel)
 
 
-
 # ===========================================================================
 # 4. РАБОЧИЙ ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (DRAWBRIDGE INDUSTRIAL)
 # ===========================================================================
@@ -783,7 +782,6 @@ def interactive_tui_loop(theme: PaletteTheme) -> None:
         sys.stdout.write("\033[?1049l\033[?25h")
         sys.stdout.flush()
         console.print(f"[bold {theme.green}][OK] Сеанс завершен.[/]")
-
 
 
 def resolve_args(argv: list[str]) -> str:

@@ -2,7 +2,7 @@
 
 > **Дата:** 2026-09-30  
 > **Фаза:** 2 — Общее ядро (Bridge Core Library)  
-> **Статус:** ✅ Завершена (100% тестов пройдены)  
+> **Статус:** [OK] Завершена (100% тестов пройдены)  
 > **Тестовое покрытие:** 104 теста (104 passed за 1.65 сек)  
 > **Git commit:** `c2faeff` — Phase 2 complete: Bridge Core library  
 
@@ -48,7 +48,7 @@ ConnectionRefusedError: [Errno 111] Connection refused
   ```python
   try:
       await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
-  except (TimeoutError, Exception):
+  except TimeoutError, Exception:
       pass  # Сокет уже освобождён операционной системой, идём дальше
   ```
 Теперь цикл событий освобождается мгновенно, а сервер и клиент гасятся за доли миллисекунды без единого зависания.
