@@ -19,7 +19,6 @@ TUI интерфейса и 5 цветовых палитр Bridge Local.
 
 from __future__ import annotations
 
-import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -72,41 +71,20 @@ OFFICIAL_THEME = PaletteTheme(
 # 2. ДВА ОФИЦИАЛЬНЫХ ЛОГОТИПА
 # ===========================================================================
 
-# 1. BRIDGES MASTER — для полноэкранного экрана приветствия (Neofetch)
-BRIDGES_MASTER = r"""
-                           .::.
-                       .:/XXXXXX\:.
-                    .:+HMM@@@@@@MMH+:.
-                  . =XMM@##[#  #]##@MMX= .
-                . +HMM@#-         -#@MMH+ .
-              . =XMM@#-   /\   /\   -#@MMX= .
-            . :dMM@#-    /  \ /  \    -#@MMb: .
-          . :uMM@#-     / /\ V /\ \     -#@MMu: .
-       ..::[dMM@#-     | |  | |  | |     -#@MMb]::..
-     .:[u8NNMM@#-      | |  | |  | |      -#@MMNN8u]:.
-   .:[dMM@@@MM@#-      | | /| |\ | |      -#@MM@@@MMb]:.
- .u8NNMM@#::#@MMX==.   |_|/_|_|_\|_|   .==XMM@#::#@MMNN8u.
-:dMM@#-.     .-#@MMH+-.             .-+HMM@#-.     .-#@MMb:
-\XX/-          .-\@MMX=============XMM@/-.          -\XX/
-╔═════════════════════════════════════════════════════════╗
-║  [#]     B  R  I  D  G  E  S     L  O  C  A  L     [#]  ║
-║          ///  S T R A N D   N E T W O R K  ///          ║
-╚═════════════════════════════════════════════════════════╝
-/XX\-          .-/MM@X=============XMM@\-.          -/XX\
-:dMM@#-.     .-#@MMH+-  \  \ | /  /  -+HMM@#-.     .-#@MMb:
- 'u8NNMM@#::#@MMX==.  \  \  \|/  /  /  .==XMM@#::#@MMNN8u'
-   ':[dMM@@@MM@#-   \  \  \  |  /  /  /   -#@MM@@@MMb]:'
-     .:[u8NNMM@#- ---+---+---+---+---+--- -#@MMNN8u]:.
-       ''::[dMM@#-    \   \  |  /   /    -#@MMb]::''
-          ' :uMM@#-    \   \ | /   /    -#@MMu: '
-            ' :dMM@#- --\---+---+--/-- -#@MMb: '
-              ' =XMM@#-  \  \|/  /  -#@MMX= '
-                ' +HMM@#- \  |  / -#@MMH+ '
-                  ' =XMM@#--\+-/--#@MMX= '
-                    ' :+HMM\#|#/MMH+: '
-                       ':/XXXXXX\:'
-                           '::'
-"""
+# 1. BRIDGES MASTER — компактный логотип для экрана приветствия (Neofetch / Splash)
+BRIDGES_MASTER = r"""         .::/XXXXXX\::.
+     .:+HMM@#- /\   /\ -#@MMH+:.
+   .=XMM@#-   /  \ /  \   -#@MMX=.
+  :dMM@#-   | | /| |\ | |   -#@MMb:
+ ╔════════════════════════════════╗
+ ║    B R I D G E S   L O C A L   ║
+ ║     /// STRAND NETWORK ///     ║
+ ╚════════════════════════════════╝
+  :dMM@#-   \  \ | /  /     -#@MMb:
+   '=XMM@#- --+---+---+--- -#@MMX='
+     ':+HMM@#-\  \|/  /-#@MMH+:'
+         '::\XXXXXX/::'"""
+
 
 # 2. DRAWBRIDGE INDUSTRIAL — для оперативных рабочих окон и HUD
 DRAWBRIDGE_INDUSTRIAL = r"""
@@ -151,9 +129,7 @@ DRAWBRIDGE_HEADER = r"""      .▄█ ││ █▄.       D R A W B R I D G E  
 
 
 def render_welcome_screen(theme: PaletteTheme) -> None:
-    """Выводит полноэкранный экран приветствия с большим BRIDGES Master и Neofetch-сводкой."""
-    term_width, _ = shutil.get_terminal_size((120, 40))
-
+    """Выводит компактный экран приветствия Neofetch с BRIDGES Master и статусом."""
     p = theme.primary
     s = theme.secondary
     w = theme.text
@@ -163,58 +139,38 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
     pu = theme.purple
 
     info = f"""[bold {w}]anhelm@workstation[/]
-[dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {s}]Host OS:[/]        Linux 6.13 (Arch Linux x86_64)
-[bold {b}]Local Node:[/]     LINUX-HOST (192.168.1.104)
-[bold {s}]Core Operator:[/]  agy_cli (Antigravity CLI Agent)
-
-[bold {pu}]Remote Node:[/]    WIN-PC (192.168.1.150:41037)
-[bold {pu}]Remote OS:[/]      Windows 11 Pro 64-bit (Build 26100)
-[bold {pu}]Remote Agent:[/]   BridgeLocalAgent [bold {g}][RUNNING][/]
-
-[bold {b}]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
-[dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {s}]Канал связи:[/]    P2P Direct LAN (1.0 Gbps Full Duplex)
-[bold {s}]Пинг (Latency):[/]  0.38 ms [bold {g}][STABLE LAN · OK][/]
-[bold {s}]Безопасность:[/]    HMAC-SHA256 Challenge-Response Session
-[bold {s}]Транспорт:[/]       JSON-RPC 2.0 / Length-Prefix Wire Framing
-[bold {s}]Fail-Fast:[/]       1500 ms (Мгновенное обнаружение обрыва)
-
-[bold {a}]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
-[dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {s}]Карман (Pocket):[/] ~/.bridge_local/pocket/
-[bold {s}]Файлов в кармане:[/] 18 объектов (1.4 GB) [bold {g}][100% SHA-256 MATCH][/]
-[bold {s}]Заметки (Notes):[/] 42 записи [bold {g}][0 непрочитанных][/]
-
-[bold {b}]РЕЖИМЫ РАБОТЫ (MODES)[/]
-[dim {s}]─────────────────────────────────────────────────────────────[/]
-  [bold {b}][F1][/] Дашборд   [bold {a}][F2][/] Карман   [bold {b}][F3][/] Заметки
-  [bold {pu}][F4][/] Exec      [bold {s}][F5][/] Конфиг   [bold {w}][Q][/]  Выход
-"""
+[dim {s}]──────────────────────────────────[/]
+[bold {s}]OS:[/]       Linux ◄► Windows 11 Pro
+[bold {b}]Nodes:[/]    LINUX-HOST ◄► WIN-PC
+[bold {g}]Link:[/]     LAN · 0.38 ms [bold {g}][ONLINE][/]
+[bold {s}]Security:[/] HMAC-SHA256 Auth
+[bold {s}]Engine:[/]   JSON-RPC 2.0 (Fail-Fast 1.5s)
+[bold {a}]Pocket:[/]   18 files · 1.4 GB [bold {g}][SYNC][/]
+[bold {pu}]Notes:[/]    42 notes [bold {g}][0 unread][/]
+[bold {s}]Operator:[/] [bold {b}]agy_cli[/] (Antigravity)"""
 
     logo_text = Text(BRIDGES_MASTER, style=f"bold {p}")
     logo_panel = Panel(
         logo_text,
-        title=f"[bold {p}]◈ BRIDGES MASTER EMBLEM ◈[/]",
-        subtitle=f"[dim {s}]STRAND NETWORK · LAN BACKBONE[/]",
+        title=f"[bold {p}]◈ BRIDGES ◈[/]",
         border_style=s,
+        padding=0,
+        width=38,
     )
     info_panel = Panel(
         info,
-        title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
-        subtitle=f"[dim {b}]● THEME: {theme.name}[/]",
+        title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС ][/]",
         border_style=s,
+        padding=(0, 1),
+        width=40,
     )
 
-    if term_width >= 120:
-        grid = Table.grid(expand=True)
-        grid.add_column(width=63)
-        grid.add_column(ratio=1)
-        grid.add_row(logo_panel, info_panel)
-        console.print(grid)
-    else:
-        console.print(logo_panel)
-        console.print(info_panel)
+    grid = Table.grid()
+    grid.add_column(width=38)
+    grid.add_column(width=40)
+    grid.add_row(logo_panel, info_panel)
+    console.print(grid)
+
 
 
 # ===========================================================================
@@ -223,7 +179,7 @@ def render_welcome_screen(theme: PaletteTheme) -> None:
 
 
 def render_operational_header(theme: PaletteTheme) -> None:
-    """Шапка оперативного окна с логотипом DRAWBRIDGE Industrial и яркими акцентами."""
+    """Шапка оперативного окна с логотипом DRAWBRIDGE Industrial без эмодзи и без игрового лора."""
     header_text = Text()
     # Строка 1
     header_text.append("      .▄█ ││ █▄.       ", style=f"bold {theme.secondary}")
@@ -233,7 +189,7 @@ def render_operational_header(theme: PaletteTheme) -> None:
     # Строка 2
     header_text.append("     //║  ||  ║\\\\      ", style=f"bold {theme.secondary}")
     header_text.append(
-        "/// BOTH STICK AND ROPE : TO PROTECT AND CONNECT\n",
+        "/// LAN P2P BACKBONE // DIRECT COMMUNICATION LINK ///\n",
         style=f"dim {theme.text}",
     )
     # Строка 3
@@ -241,7 +197,7 @@ def render_operational_header(theme: PaletteTheme) -> None:
     header_text.append("[", style="bold white")
     header_text.append("LNX: 192.168.1.104", style=f"bold {theme.blue}")
     header_text.append(" ◄════► ", style=f"bold {theme.amber}")
-    header_text.append("WIN: 192.168.1.150", style=f"bold {theme.purple}")
+    header_text.append("WIN: 192.168.1.150:41037", style=f"bold {theme.purple}")
     header_text.append("]\n", style="bold white")
     # Строка 4
     header_text.append("   (o)═══╝||╚═══(o)    ", style=f"bold {theme.secondary}")
@@ -255,33 +211,33 @@ def render_operational_header(theme: PaletteTheme) -> None:
     console.print(
         Panel(
             header_text,
-            title=f"[bold {theme.primary}]⚓ DRAWBRIDGE INDUSTRIAL // OPERATIONAL HUB ⚓[/]",
+            title=f"[bold {theme.primary}]DRAWBRIDGE INDUSTRIAL // OPERATIONAL HUB[/]",
             border_style=theme.secondary,
+            padding=(0, 1),
         )
     )
 
 
 def render_mode_tabs(active_mode: str, theme: PaletteTheme) -> None:
-    """Верхний таб-бар переключения режимов с яркой активной вкладкой."""
+    """Верхний таб-бар переключения режимов с яркой активной вкладкой (ровно 66 колонок)."""
     modes = [
-        ("DASH", "F1"),
-        ("POCKET", "F2"),
-        ("NOTES", "F3"),
-        ("EXEC", "F4"),
-        ("CONFIG", "F5"),
-        ("DEV", "F6"),
+        ("DASH", "1"),
+        ("POCKET", "2"),
+        ("NOTES", "3"),
+        ("EXEC", "4"),
+        ("CONFIG", "5"),
+        ("DEV", "6"),
     ]
     bar = Text()
-    bar.append(" [BRIDGE] ", style=f"bold black on {theme.blue}")
-    bar.append(" ")
+    bar.append("[BRIDGE] ", style=f"bold black on {theme.blue}")
     for i, (name, key) in enumerate(modes):
         if name == active_mode:
-            bar.append(f" █ {key}:{name} ", style="bold white on #1F6FEB")
+            bar.append(f"█ {key}:{name}", style="bold white on #1F6FEB")
         else:
-            bar.append(f" {key}:{name} ", style=f"dim {theme.secondary}")
+            bar.append(f"{key}:{name}", style=f"dim {theme.secondary}")
         if i < len(modes) - 1:
-            bar.append("│")
-    console.print(Panel(bar, style=theme.secondary, expand=True))
+            bar.append(" │ ")
+    console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
 
 
 def render_dashboard_mode(theme: PaletteTheme) -> None:
@@ -294,43 +250,40 @@ def render_dashboard_mode(theme: PaletteTheme) -> None:
     grid.add_column(ratio=1)
 
     left = Panel(
-        f"""[bold white]ЛОКАЛЬНАЯ ШИНА СВЯЗИ (P2P BACKBONE)[/]
+        f"""[bold white]СЕТЕВОЙ КАНАЛ (P2P BACKBONE)[/]
 [bold {theme.blue}]ХОСТ: LINUX (Workstation)[/]
   |- IP: 192.168.1.104
-  |- OS: Linux 6.13 (Arch Linux)
-  +- Оператор: agy_cli (Antigravity Agent)
+  |- OS: Linux 6.13 (Arch)
+  +- Агент: [bold {theme.green}]agy_cli [ONLINE][/]
 
 [bold {theme.purple}]УЗЕЛ: WIN-PC (Service Daemon)[/]
   |- IP: 192.168.1.150:41037
   |- Статус: [bold {theme.green}]ONLINE (Готов)[/]
-  |- Heartbeat: 0.38 ms [bold {theme.green}][OK][/] (Лимит: 1500 ms)
-  |- CPU: 2.4% | RAM: 14.2 / 64 GB
+  |- Пинг: 0.38 ms [bold {theme.green}][OK][/] (Лимит 1.5s)
+  |- Нагрузка: CPU 2.4% | RAM 14G
   +- Uptime: 4d 18h 32m""",
-        title="[bold white][ СЕТЕВОЙ КАНАЛ ][/]",
+        title="[bold white][ СЕТЬ ][/]",
         border_style=theme.secondary,
     )
 
     right = Panel(
-        f"""[bold white]СОСТОЯНИЕ ХРАНИЛИЩА И ОЧЕРЕДЕЙ[/]
-[bold {theme.amber}]КАРМАН (Pocket Storage Engine):[/]
+        f"""[bold white]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
+[bold {theme.amber}]КАРМАН (Pocket Storage):[/]
   |- Путь: ~/.bridge_local/pocket/
   |- Файлов: 18 объектов (1.4 GB)
-  |- FS Watchdog: [bold {theme.green}]АКТИВЕН[/] (0.5s debounce)
-  +- Статус: [bold {theme.green}][OK] 100% SHA-256 MATCH[/]
+  |- Watchdog: [bold {theme.green}]АКТИВЕН (0.5s)[/]
+  +- Статус: [bold {theme.green}][OK] 100% SHA-256[/]
 
 [bold {theme.blue}]ЗАМЕТКИ (Notes Engine):[/]
   |- Файл: notes.jsonl
   |- Всего записей: 42
-  +- Непрочитанных: [bold {theme.green}][0] (Все прочитаны)[/]""",
-        title="[bold white][ ХРАНИЛИЩЕ И ОЧЕРЕДИ ][/]",
+  +- Новых: [bold {theme.green}][0] (Все OK)[/]""",
+        title="[bold white][ ХРАНИЛИЩЕ ][/]",
         border_style=theme.secondary,
     )
 
     grid.add_row(left, right)
     console.print(grid)
-    console.print(
-        "[dim]Горячие клавиши: [F1..F5] Режимы | [S] Sync | [N] Новая заметка | [Q] Выход[/dim]\n"
-    )
 
 
 def render_pocket_mode(theme: PaletteTheme) -> None:
@@ -378,9 +331,6 @@ def render_pocket_mode(theme: PaletteTheme) -> None:
     )
 
     console.print(table)
-    console.print(
-        "[dim]Горячие клавиши: [D] Drop | [S] Force Sync | [V] Verify SHA | [F1..F5] Режимы[/dim]\n"
-    )
 
 
 def render_notes_mode(theme: PaletteTheme) -> None:
@@ -427,7 +377,6 @@ def render_notes_mode(theme: PaletteTheme) -> None:
 
     grid.add_row(notes_feed, stats)
     console.print(grid)
-    console.print("[dim]Горячие клавиши: [Ctrl+N] Новая | [C] Очистить | [F1..F5] Режимы[/dim]\n")
 
 
 def render_exec_mode(theme: PaletteTheme) -> None:
@@ -459,9 +408,6 @@ Status   Name               DisplayName
             title="[bold white][ УДАЛЕННЫЙ ИСПОЛНИТЕЛЬ POWERSHELL / REMOTE EXEC ][/]",
             border_style=theme.secondary,
         )
-    )
-    console.print(
-        "[dim]Горячие клавиши: [Enter] Выполнить | [Ctrl+L] Очистить | [F1..F5] Режимы[/dim]\n"
     )
 
 
@@ -500,9 +446,6 @@ def render_config_mode(theme: PaletteTheme) -> None:
     )
 
     console.print(table)
-    console.print(
-        "[dim]Горячие клавиши: [A] Добавить | [E] Изменить | [T] Пинг | [F1..F6] Режимы[/dim]\n"
-    )
 
 
 def render_dev_mode(theme: PaletteTheme) -> None:
@@ -557,9 +500,6 @@ def render_dev_mode(theme: PaletteTheme) -> None:
 
     grid.add_row(logs_feed, stats)
     console.print(grid)
-    console.print(
-        "[dim]Горячие клавиши: [1..6 / F1..F6] Режимы | [C] Clean | [P] Pause | [Q] Exit[/dim]\n"
-    )
 
 
 # ===========================================================================
@@ -719,43 +659,42 @@ def render_current_mode(mode: str, theme: PaletteTheme) -> None:
 
 
 def interactive_tui_loop(theme: PaletteTheme) -> None:
-    """Интерактивный TUI-макет: переключение вкладок по нажатию клавиш [1..6], [W], [A], [Q]."""
+    """Интерактивный TUI-макет: первый экран — сплэш, чистое переключение [1..6] без мерцания."""
     if not sys.stdin.isatty():
-        render_dashboard_mode(theme)
+        render_welcome_screen(theme)
         return
 
     import select
     import termios
     import tty
 
-    current_mode = "DASH"
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
 
-    while True:
-        console.clear()
-        console.print(
-            f"[bold {theme.blue}]◈ ИНТЕРАКТИВНЫЙ МАКЕТ BRIDGE LOCAL ◈[/] "
-            f"[dim](Нажмите [1..6] / [F1..F6] для переключения, [Q] для выхода)[/]\n"
-        )
-        render_current_mode(current_mode, theme)
-        console.print(
-            Panel(
-                f"[bold white]Навигация:[/] [bold {theme.blue}][1] DASH[/]  "
-                f"[bold {theme.amber}][2] POCKET[/]  "
-                f"[bold {theme.blue}][3] NOTES[/]  "
-                f"[bold {theme.purple}][4] EXEC[/]  "
-                f"[bold white][5] CONFIG[/]  "
-                f"[bold {theme.green}][6] DEV-LOGS[/]  "
-                f"|  [bold {theme.primary}][W] Splash[/]  "
-                f"[bold {theme.amber}][A] Анимация[/]  "
-                f"[bold {theme.red}][Q] Выход[/]",
-                border_style=theme.secondary,
+    current_mode = "WELCOME"
+
+    # Переход в alternate screen buffer и скрытие курсора (исключает скролл и артефакты)
+    sys.stdout.write("\033[?1049h\033[?25l")
+    sys.stdout.flush()
+
+    try:
+        tty.setcbreak(fd)
+        while True:
+            # Очистка экрана и перемещение курсора в (1,1) без скролла
+            sys.stdout.write("\033[H\033[2J")
+            sys.stdout.flush()
+
+            render_current_mode(current_mode, theme)
+
+            # Минималистичная однострочная подсказка внизу (без визуального шума)
+            console.print(
+                f"\n [dim]Навигация:[/] "
+                f"[bold {theme.blue}][1..6][/] Вкладки  "
+                f"[bold {theme.primary}][W][/] Сплэш  "
+                f"[bold {theme.amber}][A][/] Анимация  "
+                f"[bold {theme.red}][Q][/] Выход"
             )
-        )
 
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
             ch = sys.stdin.read(1)
             if ch == "\x1b":
                 r, _, _ = select.select([sys.stdin], [], [], 0.05)
@@ -764,14 +703,16 @@ def interactive_tui_loop(theme: PaletteTheme) -> None:
                     r, _, _ = select.select([sys.stdin], [], [], 0.05)
                     if r:
                         ch += sys.stdin.read(3)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-        current_mode, keep_going = handle_key_action(ch, current_mode)
-        if not keep_going:
-            console.clear()
-            console.print(f"[bold {theme.green}][OK] Интерактивный сеанс завершен.[/]")
-            break
+            current_mode, keep_going = handle_key_action(ch, current_mode)
+            if not keep_going:
+                break
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        sys.stdout.write("\033[?1049l\033[?25h")
+        sys.stdout.flush()
+        console.print(f"[bold {theme.green}][OK] Сеанс завершен.[/]")
+
 
 
 def resolve_args(argv: list[str]) -> str:
@@ -837,6 +778,32 @@ def main() -> None:
     if mode in ("dev", "logs"):
         render_dev_mode(theme)
         return
+    if mode in ("welcome", "neofetch"):
+        render_welcome_screen(theme)
+        return
+    if mode == "anim":
+        demo_process_animations(theme)
+        return
+    if mode == "master":
+        console.print(
+            Panel(
+                Text(BRIDGES_MASTER, style=f"bold {theme.primary}"),
+                title=f"[bold {theme.primary}]◈ BRIDGES MASTER ◈[/]",
+                border_style=theme.secondary,
+                expand=False,
+            )
+        )
+        return
+    if mode == "industrial":
+        console.print(
+            Panel(
+                Text(DRAWBRIDGE_INDUSTRIAL, style=f"bold {theme.secondary}"),
+                title=f"[bold {theme.primary}]DRAWBRIDGE INDUSTRIAL[/]",
+                border_style=theme.blue,
+                expand=False,
+            )
+        )
+        return
 
     console.print(f"\n[bold {theme.primary}]◈ {theme.name.upper()} ◈[/]")
     console.print(f"[dim {theme.blue}]{theme.desc}[/]\n")
@@ -866,8 +833,8 @@ def main() -> None:
         console.print(
             Panel(
                 Text(DRAWBRIDGE_INDUSTRIAL, style=f"bold {theme.secondary}"),
-                title=f"[bold {theme.primary}]⚓ DRAWBRIDGE INDUSTRIAL ⚓[/]",
-                subtitle="[dim white]BOTH STICK AND ROPE : TO PROTECT AND CONNECT[/]",
+                title=f"[bold {theme.primary}]DRAWBRIDGE INDUSTRIAL[/]",
+                subtitle="[dim white]LAN P2P BACKBONE : OPERATIONAL HUB[/]",
                 border_style=theme.blue,
                 expand=False,
             )
