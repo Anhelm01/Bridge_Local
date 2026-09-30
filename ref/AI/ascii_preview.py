@@ -1,26 +1,20 @@
 r"""
-ref/AI/ascii_preview.py — Интерактивный генератор и демонстратор логотипов
-и TUI интерфейса Bridge Local.
+ref/AI/ascii_preview.py — Интерактивный генератор и демонстратор логотипов,
+TUI интерфейса и 5 цветовых палитр Bridge Local.
 
-Обновления по спецификации:
-  1. Палитра из буфера обмена (ref/Hum/palette_clipboard.jpg):
-     - Electric Magenta (#E6006A) — акцентные бейджи, фокус, подсветка логотипа.
-     - Deep Cyber Teal (#027C7D) — сетевые линки, инфо-разделители, рамки узлов.
-     - Crisp Titanium White (#FFFFFF) — основной текст, символы псевдографики.
-     - Доступно переключение тем: --theme noir (по умолчанию) и --theme titanium.
-  2. Ровно 2 утвержденных логотипа (без лишних мини-версий):
-     - MASTER (BRIDGES Master): полноэкранный экран приветствия (Neofetch layout).
-     - INDUSTRIAL (DRAWBRIDGE Industrial): оперативные рабочие окна и дашборд.
-  3. Экран приветствия (Full-Screen Neofetch):
-     - В полноэкранном режиме (ширина >= 120) выводит большой BRIDGES Master слева
-       и подробную системную сводку Neofetch справа.
-  4. Рабочий оперативный интерфейс (DASH, POCKET, NOTES, EXEC, CONFIG):
-     - Полная очистка от лора Death Stranding (только реальные термины инжиниринга).
-     - Полное отсутствие эмодзи и смайликов (только текстовые маркеры [OK], [BUSY]).
-     - Шапка с эмблемой DRAWBRIDGE Industrial.
-  5. Анимация фоновых процессов (At-a-Glance Observability):
-     - Минимальные немерцающие индикаторы (braille spinners, transfer pulse) для
-       мгновенного считывания состояния процессов без построчного чтения текста.
+Использование:
+  uv run python ref/AI/ascii_preview.py all [1-5]       # Показать всё с выбранной палитрой
+  uv run python ref/AI/ascii_preview.py welcome [1-5]   # Полноэкранный Neofetch экран приветствия
+  uv run python ref/AI/ascii_preview.py modes [1-5]     # 5 оперативных рабочих окон (Drawbridge)
+  uv run python ref/AI/ascii_preview.py anim [1-5]      # Анимация процессов (At-a-Glance)
+  uv run python ref/AI/ascii_preview.py palettes        # Сравнительная таблица всех 5 палитр
+
+Палитры:
+  1: Acid Cyber / Plum Violet   (#D0FF00 Banana Yellow + #8116E0 Plum Violet) — новая из буфера
+  2: Cyber Noir / Graphic Novel (#E6006A Electric Magenta + #027C7D Deep Teal) — буфер #1
+  3: Chiral Amber / DS1 Classic (#F5A623 Chiral Gold + #56B6C2 Cyan / Navy) — канон Death Stranding
+  4: Titanium Monochrome / Steel (#E6EDF3 Titanium White + #ABB2BF Cold Slate) — чистый минимализм
+  5: Matrix Emerald / Tokyo     (#00FF66 Terminal Emerald + #0D7377 Deep Pine) — хакерский терминал
 """
 
 from __future__ import annotations
@@ -28,6 +22,7 @@ from __future__ import annotations
 import shutil
 import sys
 import time
+from dataclasses import dataclass
 
 from rich.console import Console
 from rich.panel import Panel
@@ -37,32 +32,78 @@ from rich.text import Text
 console = Console()
 
 # ===========================================================================
-# 1. ЦВЕТОВЫЕ ТЕМЫ (PALETTES)
+# 1. СИСТЕМА ИЗ 5 ЦВЕТОВЫХ ПАЛИТР (THEMES)
 # ===========================================================================
 
 
-class Palette:
-    """Палитра Cyber Noir из буфера обмена (ref/Hum/palette_clipboard.jpg)."""
+@dataclass(frozen=True)
+class PaletteTheme:
+    id: int
+    name: str
+    desc: str
+    primary: str  # Главный цвет (логотип Master, акценты, фокус)
+    secondary: str  # Вторичный цвет (логотип Industrial, сетевые шины, рамки)
+    text: str  # Основной текст
+    muted: str  # Приглушенный цвет
+    border: str  # Цвет контуров панелей
 
-    MAGENTA = "#E6006A"  # Electric Magenta (Внимание, фокус, активный статус)
-    TEAL = "#027C7D"  # Deep Cyber Teal (Сеть, шина P2P, стабильность)
-    WHITE = "#FFFFFF"  # Чистый белый (Текст, ключевые символы)
-    MUTED = "#5C6370"  # Приглушенный серый (Второстепенные рамки)
-    BORDER = "#027C7D"  # Основной цвет контуров панелей
 
-
-class TitaniumPalette:
-    """Альтернативная тема: Титановый монохром."""
-
-    MAGENTA = "#E6EDF3"
-    TEAL = "#ABB2BF"
-    WHITE = "#FFFFFF"
-    MUTED = "#5C6370"
-    BORDER = "#ABB2BF"
+PALETTES: dict[int, PaletteTheme] = {
+    1: PaletteTheme(
+        id=1,
+        name="Acid Cyber / Plum Violet",
+        desc="NFT-вайб из буфера: #D0FF00 (Banana Yellow) + #8116E0 (Plum Violet)",
+        primary="#D0FF00",
+        secondary="#8116E0",
+        text="#FEFFFC",
+        muted="#5C6370",
+        border="#8116E0",
+    ),
+    2: PaletteTheme(
+        id=2,
+        name="Cyber Noir / Graphic Novel",
+        desc="Cyber Noir из буфера: #E6006A (Electric Magenta) + #027C7D (Deep Teal)",
+        primary="#E6006A",
+        secondary="#027C7D",
+        text="#FFFFFF",
+        muted="#5C6370",
+        border="#027C7D",
+    ),
+    3: PaletteTheme(
+        id=3,
+        name="Chiral Amber / DS1 Classic",
+        desc="Каноничный Death Stranding: #F5A623 (Chiral Gold) + #56B6C2 (Cyan) / Navy",
+        primary="#F5A623",
+        secondary="#56B6C2",
+        text="#FFFFFF",
+        muted="#5C6370",
+        border="#DCA134",
+    ),
+    4: PaletteTheme(
+        id=4,
+        name="Titanium Monochrome / Steel",
+        desc="Титановый стелс: #E6EDF3 (Titanium White) + #ABB2BF (Cold Slate)",
+        primary="#E6EDF3",
+        secondary="#ABB2BF",
+        text="#FFFFFF",
+        muted="#5C6370",
+        border="#ABB2BF",
+    ),
+    5: PaletteTheme(
+        id=5,
+        name="Matrix Emerald / Tokyo Terminal",
+        desc="Хакерский ретро-терминал: #00FF66 (Terminal Emerald) + #0D7377 (Deep Pine)",
+        primary="#00FF66",
+        secondary="#0D7377",
+        text="#E0F2F1",
+        muted="#5C6370",
+        border="#0D7377",
+    ),
+}
 
 
 # ===========================================================================
-# 2. ДВА УТВЕРЖДЕННЫХ ЛОГОТИПА (MASTER И INDUSTRIAL)
+# 2. ДВА ОФИЦИАЛЬНЫХ ЛОГОТИПА
 # ===========================================================================
 
 # 1. BRIDGES MASTER — для полноэкранного экрана приветствия (Neofetch)
@@ -143,58 +184,58 @@ DRAWBRIDGE_HEADER = r"""      .▄█ ││ █▄.       D R A W B R I D G E  
 # ===========================================================================
 
 
-def render_welcome_screen(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_welcome_screen(theme: PaletteTheme) -> None:
     """Выводит полноэкранный экран приветствия с большим BRIDGES Master и Neofetch-сводкой."""
     term_width, _ = shutil.get_terminal_size((120, 40))
 
-    m = theme.MAGENTA
-    t = theme.TEAL
+    p = theme.primary
+    s = theme.secondary
+    w = theme.text
 
-    info = f"""[bold white]anhelm@workstation[/]
-[dim {t}]─────────────────────────────────────────────────────────────[/]
-[bold {t}]Host OS:[/]        Linux 6.13 (Arch Linux x86_64)
-[bold {t}]Local Node:[/]     LINUX-HOST (192.168.1.104)
-[bold {t}]Core Operator:[/]  agy_cli (Antigravity CLI Agent)
+    info = f"""[bold {w}]anhelm@workstation[/]
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+[bold {s}]Host OS:[/]        Linux 6.13 (Arch Linux x86_64)
+[bold {s}]Local Node:[/]     LINUX-HOST (192.168.1.104)
+[bold {s}]Core Operator:[/]  agy_cli (Antigravity CLI Agent)
 
-[bold {m}]Remote Node:[/]    WIN-PC (192.168.1.150:41037)
-[bold {m}]Remote OS:[/]      Windows 11 Pro 64-bit (Build 26100)
-[bold {m}]Remote Agent:[/]   BridgeLocalAgent [bold green][RUNNING][/]
+[bold {p}]Remote Node:[/]    WIN-PC (192.168.1.150:41037)
+[bold {p}]Remote OS:[/]      Windows 11 Pro 64-bit (Build 26100)
+[bold {p}]Remote Agent:[/]   BridgeLocalAgent [bold green][RUNNING][/]
 
-[bold white]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
-[dim {t}]─────────────────────────────────────────────────────────────[/]
-[bold {t}]Канал связи:[/]    P2P Direct LAN (1.0 Gbps Full Duplex)
-[bold {t}]Пинг (Latency):[/]  0.38 ms [bold green][STABLE LAN · OK][/]
-[bold {t}]Безопасность:[/]    HMAC-SHA256 Challenge-Response Session
-[bold {t}]Транспорт:[/]       JSON-RPC 2.0 / Length-Prefix Wire Framing
-[bold {t}]Fail-Fast:[/]       1500 ms (Мгновенное обнаружение обрыва)
+[bold {w}]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+[bold {s}]Канал связи:[/]    P2P Direct LAN (1.0 Gbps Full Duplex)
+[bold {s}]Пинг (Latency):[/]  0.38 ms [bold green][STABLE LAN · OK][/]
+[bold {s}]Безопасность:[/]    HMAC-SHA256 Challenge-Response Session
+[bold {s}]Транспорт:[/]       JSON-RPC 2.0 / Length-Prefix Wire Framing
+[bold {s}]Fail-Fast:[/]       1500 ms (Мгновенное обнаружение обрыва)
 
-[bold white]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
-[dim {t}]─────────────────────────────────────────────────────────────[/]
-[bold {m}]Карман (Pocket):[/] ~/.bridge_local/pocket/
-[bold {m}]Файлов в кармане:[/] 18 объектов (1.4 GB) [bold green][100% SHA-256 MATCH][/]
-[bold {m}]Заметки (Notes):[/] 42 записи [bold green][0 непрочитанных][/]
+[bold {w}]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+[bold {p}]Карман (Pocket):[/] ~/.bridge_local/pocket/
+[bold {p}]Файлов в кармане:[/] 18 объектов (1.4 GB) [bold green][100% SHA-256 MATCH][/]
+[bold {p}]Заметки (Notes):[/] 42 записи [bold green][0 непрочитанных][/]
 
-[bold white]РЕЖИМЫ РАБОТЫ (MODES)[/]
-[dim {t}]─────────────────────────────────────────────────────────────[/]
-  [bold {m}][F1][/] Дашборд   [bold {m}][F2][/] Карман   [bold {m}][F3][/] Заметки
-  [bold {m}][F4][/] Exec      [bold {m}][F5][/] Конфиг   [bold {m}][Q][/]  Выход
+[bold {w}]РЕЖИМЫ РАБОТЫ (MODES)[/]
+[dim {s}]─────────────────────────────────────────────────────────────[/]
+  [bold {p}][F1][/] Дашборд   [bold {p}][F2][/] Карман   [bold {p}][F3][/] Заметки
+  [bold {p}][F4][/] Exec      [bold {p}][F5][/] Конфиг   [bold {p}][Q][/]  Выход
 """
 
-    logo_text = Text(BRIDGES_MASTER, style=f"bold {theme.MAGENTA}")
+    logo_text = Text(BRIDGES_MASTER, style=f"bold {p}")
     logo_panel = Panel(
         logo_text,
-        title=f"[bold {theme.MAGENTA}]◈ BRIDGES MASTER EMBLEM ◈[/]",
-        subtitle=f"[dim {theme.TEAL}]STRAND NETWORK · LAN BACKBONE[/]",
-        border_style=theme.TEAL,
+        title=f"[bold {p}]◈ BRIDGES MASTER EMBLEM ◈[/]",
+        subtitle=f"[dim {s}]STRAND NETWORK · LAN BACKBONE[/]",
+        border_style=s,
     )
     info_panel = Panel(
         info,
-        title="[bold white][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
-        subtitle="[dim green]● SYSTEM LINK OPERATIONAL[/]",
-        border_style=theme.TEAL,
+        title=f"[bold {w}][ СИСТЕМНЫЙ СТАТУС / NEOFETCH ][/]",
+        subtitle=f"[dim {p}]● THEME #{theme.id}: {theme.name}[/]",
+        border_style=s,
     )
 
-    # Если терминал достаточно широкий (полный экран >= 120 колонок) — 2 колонки
     if term_width >= 120:
         grid = Table.grid(expand=True)
         grid.add_column(width=63)
@@ -202,7 +243,6 @@ def render_welcome_screen(theme: type[Palette] | type[TitaniumPalette] = Palette
         grid.add_row(logo_panel, info_panel)
         console.print(grid)
     else:
-        # Для узких терминалов — вертикальное расположение
         console.print(logo_panel)
         console.print(info_panel)
 
@@ -212,20 +252,18 @@ def render_welcome_screen(theme: type[Palette] | type[TitaniumPalette] = Palette
 # ===========================================================================
 
 
-def render_operational_header(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_operational_header(theme: PaletteTheme) -> None:
     """Шапка оперативного окна с логотипом DRAWBRIDGE Industrial."""
     console.print(
         Panel(
-            Text(DRAWBRIDGE_HEADER, style=f"bold {theme.TEAL}"),
-            title=f"[bold {theme.MAGENTA}]⚓ DRAWBRIDGE INDUSTRIAL // OPERATIONAL HUB ⚓[/]",
-            border_style=theme.MAGENTA,
+            Text(DRAWBRIDGE_HEADER, style=f"bold {theme.secondary}"),
+            title=f"[bold {theme.primary}]⚓ DRAWBRIDGE INDUSTRIAL // OPERATIONAL HUB ⚓[/]",
+            border_style=theme.primary,
         )
     )
 
 
-def render_mode_tabs(
-    active_mode: str, theme: type[Palette] | type[TitaniumPalette] = Palette
-) -> None:
+def render_mode_tabs(active_mode: str, theme: PaletteTheme) -> None:
     """Верхний таб-бар переключения режимов (без эмодзи, в 1 строку)."""
     modes = [
         ("DASH", "F1"),
@@ -235,19 +273,19 @@ def render_mode_tabs(
         ("CONFIG", "F5"),
     ]
     bar = Text()
-    bar.append(" [BRIDGE LOCAL] ", style=f"bold black on {theme.MAGENTA}")
+    bar.append(" [BRIDGE LOCAL] ", style=f"bold black on {theme.primary}")
     bar.append(" ")
     for i, (name, key) in enumerate(modes):
         if name == active_mode:
             bar.append(f" █ {key}:{name} ", style="bold white on #282C34")
         else:
-            bar.append(f" {key}:{name} ", style=f"dim {theme.TEAL}")
+            bar.append(f" {key}:{name} ", style=f"dim {theme.secondary}")
         if i < len(modes) - 1:
             bar.append("│")
-    console.print(Panel(bar, style=theme.TEAL, expand=True))
+    console.print(Panel(bar, style=theme.secondary, expand=True))
 
 
-def render_dashboard_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_dashboard_mode(theme: PaletteTheme) -> None:
     """Режим 1: DASHBOARD / СТАТУС (F1)."""
     render_operational_header(theme)
     render_mode_tabs("DASH", theme)
@@ -258,19 +296,19 @@ def render_dashboard_mode(theme: type[Palette] | type[TitaniumPalette] = Palette
 
     left = Panel(
         f"""[bold white]ЛОКАЛЬНАЯ ШИНА СВЯЗИ (P2P BACKBONE)[/]
-[bold {theme.TEAL}]ХОСТ: LINUX (Workstation)[/]
+[bold {theme.secondary}]ХОСТ: LINUX (Workstation)[/]
   |- IP: 192.168.1.104
   |- OS: Linux 6.13 (Arch Linux)
   +- Оператор: agy_cli (Antigravity Agent)
 
-[bold {theme.MAGENTA}]УЗЕЛ: WIN-PC (Service Daemon)[/]
+[bold {theme.primary}]УЗЕЛ: WIN-PC (Service Daemon)[/]
   |- IP: 192.168.1.150:41037
   |- Статус: [bold green]ONLINE (Готов)[/]
   |- Heartbeat: 0.38 ms [green][OK][/] (Лимит: 1500 ms)
   |- CPU: 2.4% | RAM: 14.2 / 64 GB
   +- Uptime: 4d 18h 32m""",
         title="[bold white][ СЕТЕВОЙ КАНАЛ ][/]",
-        border_style=theme.TEAL,
+        border_style=theme.secondary,
     )
 
     right = Panel(
@@ -286,7 +324,7 @@ def render_dashboard_mode(theme: type[Palette] | type[TitaniumPalette] = Palette
   |- Всего записей: 42
   +- Непрочитанных: [bold green][0] (Все прочитаны)[/]""",
         title="[bold white][ ХРАНИЛИЩЕ И ОЧЕРЕДИ ][/]",
-        border_style=theme.TEAL,
+        border_style=theme.secondary,
     )
 
     grid.add_row(left, right)
@@ -296,7 +334,7 @@ def render_dashboard_mode(theme: type[Palette] | type[TitaniumPalette] = Palette
     )
 
 
-def render_pocket_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_pocket_mode(theme: PaletteTheme) -> None:
     """Режим 2: POCKET / КАРМАН (F2) с индикатором процесса передачи."""
     render_operational_header(theme)
     render_mode_tabs("POCKET", theme)
@@ -308,7 +346,7 @@ def render_pocket_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -
     table.add_column("Размер", style="cyan", justify="right")
     table.add_column("Направление", style="yellow", justify="center")
     table.add_column("SHA-256", style="bold green", justify="center")
-    table.add_column("Активность / Статус", style=f"bold {theme.MAGENTA}")
+    table.add_column("Активность / Статус", style=f"bold {theme.primary}")
 
     table.add_row(
         "report_phase_04.docx", "2.4 MB", "LNX --> WIN", "[OK] d9e4f1a...", "[green]SYNCED[/]"
@@ -322,7 +360,7 @@ def render_pocket_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -
         "1.2 GB",
         "LNX --> WIN",
         "[yellow][⠋ SYNC][/]",
-        f"[bold {theme.MAGENTA}][>>> 68%][/] [yellow]48 MB/s[/]",
+        f"[bold {theme.primary}][>>> 68%][/] [yellow]48 MB/s[/]",
     )
     table.add_row(
         "screenshot_crash.png", "840 KB", "WIN --> LNX", "[OK] f7a012c...", "[green]SYNCED[/]"
@@ -334,7 +372,7 @@ def render_pocket_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -
     )
 
 
-def render_notes_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_notes_mode(theme: PaletteTheme) -> None:
     """Режим 3: NOTES / ЗАМЕТКИ (F3)."""
     render_operational_header(theme)
     render_mode_tabs("NOTES", theme)
@@ -344,10 +382,10 @@ def render_notes_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) ->
     grid.add_column(ratio=1)
 
     notes_feed = Panel(
-        f"""[bold {theme.TEAL}][10:04:15] WIN-PC (Windows Operator):[/]
+        f"""[bold {theme.secondary}][10:04:15] WIN-PC (Windows Operator):[/]
   Служба BridgeLocalAgent запущена в фоне, кодировка UTF-8 (chcp 65001) проверена.
 
-[bold {theme.MAGENTA}][10:08:22] LINUX (Antigravity agy_cli):[/]
+[bold {theme.primary}][10:08:22] LINUX (Antigravity agy_cli):[/]
   Интеграционные тесты ядра и RPC завершены успешно (146 тестов, 6.80с).
   Подготовлена передача весов модели через карман.
 
@@ -356,9 +394,9 @@ def render_notes_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) ->
 
 [dim]─────────────────────────────────────────────────────────────────────────────[/]
 [bold white]Ввод новой заметки ([Enter] Отправить на все узлы | [Esc] Отмена):[/]
-[bold {theme.MAGENTA}]> [/][blink]_[/]""",
+[bold {theme.primary}]> [/][blink]_[/]""",
         title="[bold white][ ЖУРНАЛ ЗАМЕТОК / NOTES STREAM ][/]",
-        border_style=theme.TEAL,
+        border_style=theme.secondary,
     )
 
     stats = Panel(
@@ -373,7 +411,7 @@ def render_notes_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) ->
  [U] Только новые
  [S] Поиск по тексту[/dim]""",
         title="[bold white][ ИНФО / СТАТИСТИКА ][/]",
-        border_style=theme.TEAL,
+        border_style=theme.secondary,
     )
 
     grid.add_row(notes_feed, stats)
@@ -381,7 +419,7 @@ def render_notes_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) ->
     console.print("[dim]Горячие клавиши: [Ctrl+N] Новая | [C] Очистить | [F1..F5] Режимы[/dim]\n")
 
 
-def render_exec_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_exec_mode(theme: PaletteTheme) -> None:
     """Режим 4: REMOTE EXEC / КОНСОЛЬ (F4)."""
     render_operational_header(theme)
     render_mode_tabs("EXEC", theme)
@@ -390,15 +428,15 @@ def render_exec_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -> 
         Panel(
             f"""[bold white]УДАЛЕННАЯ СЕССИЯ POWERSHELL (WIN-PC)[/]
 Кодировка: UTF-8 (chcp 65001) | Права: Elevated (Admin) | Таймаут: 30s
-Статус раннера: [bold green][READY][/] | Фоновый опрос: [bold {theme.MAGENTA}][⠼ IDLE][/]
+Статус раннера: [bold green][READY][/] | Фоновый опрос: [bold {theme.primary}][⠼ IDLE][/]
 
-[bold {theme.TEAL}]PS C:\\BridgeService> [/][white]Get-Service -Name "BridgeLocalAgent"[/]
+[bold {theme.secondary}]PS C:\\BridgeService> [/][white]Get-Service -Name "BridgeLocalAgent"[/]
 
 Status   Name               DisplayName
 ------   ----               -----------
 [bold green]Running[/]  BridgeLocalAgent   Bridge Local Windows Daemon v0.4.0
 
-[bold {theme.TEAL}]PS C:\\BridgeService> [/][white]Get-Process python | Select Id, WS[/]
+[bold {theme.secondary}]PS C:\\BridgeService> [/][white]Get-Process python | Select Id, WS[/]
 
    Id        CPU       WS
    --        ---       --
@@ -406,9 +444,9 @@ Status   Name               DisplayName
 
 [dim]─────────────────────────────────────────────────────────────────────────────[/]
 [bold white]Ввод команды ([Enter] Выполнить на WIN-PC | [Ctrl+C] Прервать):[/]
-[bold {theme.MAGENTA}]PS C:\\BridgeService> [/] [blink]_[/]""",
+[bold {theme.primary}]PS C:\\BridgeService> [/] [blink]_[/]""",
             title="[bold white][ УДАЛЕННЫЙ ИСПОЛНИТЕЛЬ POWERSHELL / REMOTE EXEC ][/]",
-            border_style=theme.TEAL,
+            border_style=theme.secondary,
         )
     )
     console.print(
@@ -416,7 +454,7 @@ Status   Name               DisplayName
     )
 
 
-def render_config_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def render_config_mode(theme: PaletteTheme) -> None:
     """Режим 5: CONFIG / УЗЛЫ (F5)."""
     render_operational_header(theme)
     render_mode_tabs("CONFIG", theme)
@@ -461,14 +499,12 @@ def render_config_mode(theme: type[Palette] | type[TitaniumPalette] = Palette) -
 # ===========================================================================
 
 
-def demo_process_animations(theme: type[Palette] | type[TitaniumPalette] = Palette) -> None:
+def demo_process_animations(theme: PaletteTheme) -> None:
     """Интерактивная демонстрация минимальных индикаторов активных процессов."""
     console.print(
-        f"\n[bold {theme.MAGENTA}]⚡ ДЕМОНСТРАЦИЯ МИНИМАЛЬНЫХ АНИМАЦИЙ ПРОЦЕССОВ (AT-A-GLANCE)[/]"
+        f"\n[bold {theme.primary}]⚡ ДЕМОНСТРАЦИЯ МИНИМАЛЬНЫХ АНИМАЦИЙ ПРОЦЕССОВ (AT-A-GLANCE)[/]"
     )
-    console.print(
-        "[dim]Оператор видит с расстояния, идет ли передача/опрос, без чтения текста строк:[/dim]\n"
-    )
+    console.print("[dim]Оператор видит с расстояния, идет ли передача/опрос:[/dim]\n")
 
     spinners = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     pulses = [
@@ -481,26 +517,53 @@ def demo_process_animations(theme: type[Palette] | type[TitaniumPalette] = Palet
         "[    >]",
     ]
 
-    for step in range(12):
+    for step in range(14):
         s = spinners[step % len(spinners)]
         p = pulses[step % len(pulses)]
 
         line = Text()
-        line.append(f"  [{s}] ", style=f"bold {theme.MAGENTA}")
+        line.append(f"  [{s}] ", style=f"bold {theme.primary}")
         line.append("Pocket Sync: ", style="bold white")
         line.append("model_weights.bin ", style="cyan")
-        line.append(f"{p} ", style=f"bold {theme.MAGENTA}")
+        line.append(f"{p} ", style=f"bold {theme.primary}")
         line.append(f"68% ({45 + (step % 5)} MB/s) ", style="yellow")
         line.append(" | Heartbeat probe: ", style="dim")
         line.append("0.38ms [OK] ", style="green")
 
-        # Перезаписываем строку в терминале
         sys.stdout.write("\r" + line.plain)
         sys.stdout.flush()
-        time.sleep(0.12)
+        time.sleep(0.10)
 
     sys.stdout.write("\n\n")
     sys.stdout.flush()
+
+
+def render_palettes_table() -> None:
+    """Выводит сравнительную таблицу всех 5 цветовых тем."""
+    table = Table(title="🎨 5 ВАРИАНТОВ ЦВЕТОВЫХ ПАЛИТР (Выбор: all 1 .. all 5)", expand=True)
+    table.add_column("№", style="bold white", width=4)
+    table.add_column("Название темы", style="bold", width=30)
+    table.add_column("Primary (Акцент)", width=18)
+    table.add_column("Secondary (Сеть)", width=18)
+    table.add_column("Пример плашки", width=22)
+
+    for p_id, p in PALETTES.items():
+        preview = Text()
+        preview.append(" [BRIDGE] ", style=f"bold black on {p.primary}")
+        preview.append(" ")
+        preview.append("[OK]", style=f"bold {p.primary}")
+        preview.append(" 0.38ms", style=f"bold {p.secondary}")
+
+        table.add_row(
+            str(p_id),
+            p.name,
+            Text(f"● {p.primary}", style=f"bold {p.primary}"),
+            Text(f"● {p.secondary}", style=f"bold {p.secondary}"),
+            preview,
+        )
+
+    console.print(table)
+    console.print("\n[dim]Выбор палитры: uv run python ref/AI/ascii_preview.py all [1-5][/dim]\n")
 
 
 # ===========================================================================
@@ -508,61 +571,86 @@ def demo_process_animations(theme: type[Palette] | type[TitaniumPalette] = Palet
 # ===========================================================================
 
 
-def main() -> None:
-    args = [a.lower() for a in sys.argv[1:]]
-
-    # Выбор темы:
-    theme = TitaniumPalette if "--theme=titanium" in args or "titanium" in args else Palette
-
+def resolve_args(argv: list[str]) -> tuple[str, PaletteTheme]:
+    """Парсит аргументы командной строки вида [mode] [palette_number]."""
     mode = "all"
-    for a in args:
-        if a in ("welcome", "neofetch", "modes", "industrial", "master", "anim", "all"):
-            mode = a
-            break
+    palette_id = 1  # По умолчанию: #1 (Acid Cyber из буфера)
+
+    valid_modes = (
+        "welcome",
+        "neofetch",
+        "modes",
+        "industrial",
+        "master",
+        "anim",
+        "palettes",
+        "all",
+    )
+    for a in argv:
+        if a.isdigit() and int(a) in PALETTES:
+            palette_id = int(a)
+        elif a.lower() in valid_modes:
+            mode = a.lower()
+
+    return mode, PALETTES[palette_id]
+
+
+def main() -> None:
+    raw_args = sys.argv[1:]
+    mode, theme = resolve_args(raw_args)
 
     sep = "═" * 70
 
+    if mode == "palettes":
+        render_palettes_table()
+        return
+
+    console.print(f"\n[bold {theme.primary}]◈ ПАЛИТРА #{theme.id}: {theme.name.upper()} ◈[/]")
+    console.print(f"[dim {theme.secondary}]{theme.desc}[/]\n")
+
     if mode in ("all", "master"):
-        console.print(f"\n[bold {theme.MAGENTA}]{sep}[/]")
+        console.print(f"[bold {theme.primary}]{sep}[/]")
         console.print(
-            f"[bold {theme.MAGENTA}] 1. MASTER LOGO (BRIDGES) — ДЛЯ ПОЛНОЭКРАННОГО СТАРТА [/]"
+            f"[bold {theme.primary}] 1. MASTER LOGO (BRIDGES) — ДЛЯ ПОЛНОЭКРАННОГО СТАРТА [/]"
         )
-        console.print(f"[bold {theme.MAGENTA}]{sep}[/]")
+        console.print(f"[bold {theme.primary}]{sep}[/]")
         console.print(
             Panel(
-                Text(BRIDGES_MASTER, style=f"bold {theme.MAGENTA}"),
-                title=f"[bold {theme.MAGENTA}]◈ BRIDGES MASTER ◈[/]",
-                subtitle=f"[dim {theme.TEAL}]STRAND NETWORK · LAN BACKBONE[/]",
-                border_style=theme.TEAL,
+                Text(BRIDGES_MASTER, style=f"bold {theme.primary}"),
+                title=f"[bold {theme.primary}]◈ BRIDGES MASTER ◈[/]",
+                subtitle=f"[dim {theme.secondary}]STRAND NETWORK · LAN BACKBONE[/]",
+                border_style=theme.secondary,
                 expand=False,
             )
         )
 
     if mode in ("all", "industrial"):
-        console.print(f"\n[bold {theme.TEAL}]{sep}[/]")
+        console.print(f"\n[bold {theme.secondary}]{sep}[/]")
         console.print(
-            f"[bold {theme.TEAL}] 2. INDUSTRIAL LOGO (DRAWBRIDGE) — ДЛЯ ОПЕРАТИВНЫХ ОКОН [/]"
+            f"[bold {theme.secondary}] 2. INDUSTRIAL LOGO (DRAWBRIDGE) — ДЛЯ ОПЕРАТИВНЫХ ОКОН [/]"
         )
-        console.print(f"[bold {theme.TEAL}]{sep}[/]")
+        console.print(f"[bold {theme.secondary}]{sep}[/]")
         console.print(
             Panel(
-                Text(DRAWBRIDGE_INDUSTRIAL, style=f"bold {theme.TEAL}"),
-                title=f"[bold {theme.MAGENTA}]⚓ DRAWBRIDGE INDUSTRIAL ⚓[/]",
+                Text(DRAWBRIDGE_INDUSTRIAL, style=f"bold {theme.secondary}"),
+                title=f"[bold {theme.primary}]⚓ DRAWBRIDGE INDUSTRIAL ⚓[/]",
                 subtitle="[dim white]BOTH STICK AND ROPE : TO PROTECT AND CONNECT[/]",
-                border_style=theme.MAGENTA,
+                border_style=theme.primary,
                 expand=False,
             )
         )
 
     if mode in ("all", "welcome", "neofetch"):
         console.print(f"\n[bold white]{sep}[/]")
-        console.print("[bold white] 3. ЭКРАН ПРИВЕТСТВИЯ В СТИЛЕ NEOFETCH (FULL SCREEN) [/]")
+        console.print(
+            f"[bold white] 3. ЭКРАН ПРИВЕТСТВИЯ В СТИЛЕ NEOFETCH (ПАЛИТРА #{theme.id}) [/]"
+        )
         console.print(f"[bold white]{sep}[/]\n")
         render_welcome_screen(theme)
 
     if mode in ("all", "modes"):
         console.print(f"\n[bold white]{sep}[/]")
-        console.print("[bold white] 4. ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (5 РЕЖИМОВ С ШАПКОЙ DRAWBRIDGE) [/]")
+        console.print(f"[bold white] 4. ОПЕРАТИВНЫЙ ИНТЕРФЕЙС (5 РЕЖИМОВ, ПАЛИТРА #{theme.id}) [/]")
         console.print(f"[bold white]{sep}[/]\n")
         render_dashboard_mode(theme)
         render_pocket_mode(theme)
