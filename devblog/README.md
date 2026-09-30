@@ -15,7 +15,7 @@
 | **Фаза 3** | Windows Agent & Служба | ✅ | [phase_03_win_agent.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_03_win_agent.md) | PowerShell Runner (UTF-8), Process Tree Killer, Windows Service Daemon, сквозная интеграция, 122 теста |
 | **Фаза 4** | «Карман» и «Записки» | ✅ | [phase_04_pocket_notes.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_04_pocket_notes.md) | Чанковая передача (64 КБ), сверка SHA-256, атомарная запись, Watchdog дебаунс, Notes JSONL, 146 тестов |
 | **Подфаза 4.5** | UI/UX & Visual Identity | ✅ | [phase_04_5_ui_ux_identity.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_04_5_ui_ux_identity.md) | Единая тема Titanium Vivid, 2-логотипная система (Master + Industrial), анимации процессов, preview-стенд |
-| **Фаза 5** | Linux Client CLI & TUI | ⏳ *В очереди* | `phase_05_linux_cli.md` | Human CLI + Headless JSON для agy_cli + интерактивный TUI монитор |
+| **Фаза 5** | Linux Client CLI & TUI | ✅ | [phase_05_linux_cli.md](file:///home/anhelm/Projects/Bridge_Local/devblog/phase_05_linux_cli.md) | Typer CLI, Headless JSON, Exit Codes 0..5, TUI 6 режимов, 177 тестов |
 | **Фаза 6** | Отказоустойчивость | ⏳ *В очереди* | `phase_06_resilience.md` | Сон Windows, обрыв Wi-Fi, авто-докачка кармана, стресс-тесты |
 | **Фаза 7** | Релиз и дистрибуция | ⏳ *В очереди* | `phase_07_release.md` | PyInstaller standalone .exe, инсталлятор службы, чистая изоляция dev-логов |
 

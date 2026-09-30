@@ -37,7 +37,7 @@ def _logger_trace(self: logging.Logger, message: str, *args: Any, **kwargs: Any)
 
 # Добавляем метод trace в класс Logger, если его ещё нет
 if not hasattr(logging.Logger, "trace"):
-    logging.Logger.trace = _logger_trace
+    logging.Logger.trace = _logger_trace  # type: ignore[attr-defined]
 
 logger = logging.getLogger(__name__)
 

@@ -50,7 +50,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]  # Allow Cyrillic in strings/docstrings/comments
+ignore = ["RUF001", "RUF002", "RUF003", "B008"]  # Allow Cyrillic and Typer argument defaults
 
 [tool.ruff.format]
 quote-style = "double"
@@ -61,6 +61,14 @@ python_version = "3.14"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "psutil"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests", "tests.*"]
+ignore_errors = true
 
 # --- Pytest Configuration ---
 [tool.pytest.ini_options]

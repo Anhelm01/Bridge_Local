@@ -31,7 +31,14 @@
   - The CLI and TUI must remain dead-simple for the user's daily life: instant file dropping into the pocket and sending quick text notes/links between Linux and Windows in a single short command without configuration friction.
 - **AI Operator Protocol (Antigravity agy_cli Compatibility):**
   - The primary programmatic operator on Linux is the Antigravity CLI agent (`agy_cli`).
-  - All commands must support a strict `--json` mode with machine-readable payloads, deterministic exit codes (0 = success, standardized non-zero error codes), zero ANSI-escape artifacts, and zero blocking on stdin.
+  - All commands must support a strict `--json` mode with machine-readable payloads, deterministic exit codes, zero ANSI-escape artifacts, and zero blocking on stdin.
+  - Standardized Exit Codes (`bridge_client_linux.exit_codes.ExitCode`):
+    - `0` (`SUCCESS`): Command executed successfully.
+    - `1` (`GENERAL_ERROR`): Invalid arguments, configuration failure, or internal error.
+    - `2` (`NETWORK_ERROR`): Target host unreachable, socket failure, connection refused.
+    - `3` (`AUTH_ERROR`): Pre-shared key mismatch, HMAC verification failure, replay detected.
+    - `4` (`COMMAND_FAILED`): Remote PowerShell process terminated with non-zero exit code.
+    - `5` (`TIMEOUT`): Command execution or RPC response exceeded allotted timeout.
   - Outputs must be token-efficient to minimize LLM context consumption for lightweight models.
 - **Future-Proof Extensibility (Multi-Node & Inter-Agent):**
   - All protocol envelopes and DTO models must reserve optional `source_node` and `target_node` fields so that 3+ node mesh routing and Linux `agy_cli` ↔ Windows `agy_cli` cross-account orchestration can be introduced without breaking wire compatibility.
@@ -42,3 +49,8 @@
   - **Operator Goal:** The human operator must be able to glance at the terminal screen from a distance and immediately understand what is actively working, transferring, or waiting, vs what is idle, synced, or errored, without having to read every single line of text or log status.
   - **Zero Flicker Standard:** Terminal animations must be strictly localized to designated glyph placeholders without redrawing the entire screen or causing cursor jump artifacts.
   - **Headless Cleanliness:** When running with `--json` or non-interactive stdout (e.g., invoked by `agy_cli`), all spinner loops and animation escapes must be completely omitted.
+
+## 8. Multi-Node Topology & Modular Scalability (Roadmap F1/F2 Foundation)
+- **Zero Two-Node Assumptions:** Code in `bridge_core`, `bridge_client_linux`, and `bridge_agent_win` must never hardcode assumptions that the topology is strictly 1:1.
+- **Explicit Addressing:** Every RPC packet carries `source_node` and `target_node`. CLI commands provide `--node / --target` overrides that default to configured target names, ensuring transparent forward-compatibility when node registries or mesh discovery are activated in future phases.
+- **Independent Package Extraction:** Packages `bridge_core`, `bridge_client_linux`, and `bridge_agent_win` must be fully independent Python packages with `py.typed` markers, clean imports, and zero circular dependencies, ready to be packaged as standalone wheels or imported into multi-agent systems.

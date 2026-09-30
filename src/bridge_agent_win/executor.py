@@ -140,7 +140,7 @@ class PowerShellExecutor:
         else:
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
 
-        proc = await asyncio.create_subprocess_exec(*cmd_args, **kwargs)
+        proc = await asyncio.create_subprocess_exec(*cmd_args, **kwargs)  # type: ignore[arg-type]
         pid = proc.pid
         logger.debug("[DEV-EXEC] Процесс запущен: PID=%d", pid)
 
