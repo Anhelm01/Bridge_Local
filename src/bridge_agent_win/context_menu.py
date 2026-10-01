@@ -11,6 +11,7 @@ bridge_agent_win.context_menu — Интеграция с контекстным
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -306,10 +307,8 @@ def drop_file_to_pocket(
             part = pocket_dir / f".{src.name}.{os.getpid()}.part"
             shutil.copy2(src, part)
             if dest.exists() and dest.is_file():
-                try:
+                with contextlib.suppress(OSError):
                     dest.unlink()
-                except OSError:
-                    pass
             os.replace(part, dest)
 
         logger.info("[POCKET-DROP] Объект '%s' успешно скопирован в карман: %s", src.name, dest)

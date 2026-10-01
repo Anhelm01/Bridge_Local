@@ -367,6 +367,7 @@ class BridgeClient:
         Returns:
             PocketSyncSummary со статистикой передачи.
         """
+
         # Используем существующий проверенный механизм синхронизации из bridge_core
         # с поддержкой PSK-аутентификации через _call
         class _AuthenticatedAdapter:
@@ -380,7 +381,7 @@ class BridgeClient:
                 return await self._bc._call(method, params=params, target_node=self._target)
 
         return await sync_pocket(
-            client=_AuthenticatedAdapter(self, target_node),  # type: ignore[arg-type]
+            client=_AuthenticatedAdapter(self, target_node),
             local_manager=self.pocket_manager,
             direction=direction,
             chunk_size=chunk_size,

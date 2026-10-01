@@ -8,6 +8,7 @@ tomli_w-совместимую запись через ручной сериал
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import sys
@@ -207,10 +208,10 @@ class BridgeConfig(BaseModel):
                 Path(sys.executable).parent / "bridge.toml",
                 Path(sys.executable).parent.parent / "bridge.toml",
             ]
-            try:
-                candidate_paths.append(Path(__file__).resolve().parent.parent.parent / "bridge.toml")
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                candidate_paths.append(
+                    Path(__file__).resolve().parent.parent.parent / "bridge.toml"
+                )
 
             if sys.platform == "win32":
                 candidate_paths.append(Path(r"C:\BridgeLocal\bridge.toml"))

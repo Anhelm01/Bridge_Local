@@ -143,7 +143,7 @@ def setup_interactive() -> None:
             print(f"  1. На Linux введите: bridge connect {ips[0]}:{cfg.connection.port}")
             print(f"     или в TUI на [F7:CONNECT] введите: {ips[0]}:{cfg.connection.port}")
         print("  2. На Windows запустите run_agent.bat или install_service.bat")
-    except (KeyboardInterrupt, EOFError):
+    except KeyboardInterrupt, EOFError:
         print("\n[INFO] Настройка отменена пользователем.")
 
 

@@ -112,7 +112,7 @@ def read_terminal_key(stream: Any = sys.stdin, timeout_sec: float = 0.04) -> str
             try:
                 r, _, _ = select.select([stream], [], [], timeout_sec)
                 return bool(r)
-            except (io.UnsupportedOperation, OSError, ValueError):
+            except io.UnsupportedOperation, OSError, ValueError:
                 pass
         if hasattr(stream, "tell") and hasattr(stream, "getvalue"):
             pos = int(stream.tell())

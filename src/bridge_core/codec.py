@@ -129,7 +129,7 @@ class WindowsOutputDecoder:
                     normalize_newlines=normalize_newlines,
                     strip_ansi=strip_ansi,
                 )
-            except (UnicodeDecodeError, LookupError):
+            except UnicodeDecodeError, LookupError:
                 continue
 
         # 4. Fallback: UTF-8 с заменой невалидных байтов символом
