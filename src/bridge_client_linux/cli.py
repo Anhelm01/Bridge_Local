@@ -927,8 +927,13 @@ def run() -> None:
         else:
             env.pop("LD_PRELOAD", None)
         env["BRIDGE_NO_PROXY_BYPASS"] = "1"
+        exec_args = (
+            [sys.executable, *sys.argv[1:]]
+            if getattr(sys, "frozen", False)
+            else [sys.executable, *sys.argv]
+        )
         with contextlib.suppress(Exception):
-            os.execvpe(sys.executable, [sys.executable, *sys.argv], env)
+            os.execvpe(sys.executable, exec_args, env)
 
     app()
 

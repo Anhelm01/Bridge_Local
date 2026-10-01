@@ -3,7 +3,8 @@ bridge_client_linux.tui.app — Интерактивный цикл TUI прил
 
 Реализует:
   - Безопасную инициализацию alternate screen buffer (исключает повреждение терминала).
-  - Обработку функциональных клавиш F1..F6, цифр 1..6, Tab, Q, Esc, W, A, R.
+  - Навигацию по вкладкам через Tab и Shift+Tab:
+    (SPLASH, DASH, POCKET, NOTES, EXEC, CONFIG, DEV, CONNECT).
   - Честный неблокирующий опрос доступности Windows-агента (OFFLINE / ONLINE).
   - Однопроходный режим для неинтерактивных сред / CI / тестов.
   - Чистое восстановление настроек терминала при завершении.
@@ -28,7 +29,7 @@ from bridge_client_linux.tui.theme import OFFICIAL_THEME, PaletteTheme
 console = Console()
 
 
-def probe_target_socket(host: str, port: int, timeout_sec: float = 0.25) -> tuple[bool, float]:
+def probe_target_socket(host: str, port: int, timeout_sec: float = 0.5) -> tuple[bool, float]:
     """
     Быстрая неблокирующая проверка доступности сокета целевого узла.
 
@@ -65,25 +66,23 @@ def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
     if k in ("q", "\x03", "quit", "exit"):
         return current_mode, False
 
-    # Режимы 1..7
-    if k in ("1", "f1", "\x1bop", "dash"):
-        return "DASH", True
-    if k in ("2", "f2", "\x1boq", "pocket"):
-        return "POCKET", True
-    if k in ("3", "f3", "\x1bor", "notes"):
-        return "NOTES", True
-    if k in ("4", "f4", "\x1bos", "exec"):
-        return "EXEC", True
-    if k in ("5", "f5", "\x1b[15~", "config"):
-        return "CONFIG", True
-    if k in ("6", "f6", "\x1b[17~", "dev", "logs"):
-        return "DEV", True
-    if k in ("7", "f7", "\x1b[18~", "connect", "setup", "c"):
-        return "CONNECT", True
-
-    # Экран приветствия / Neofetch
+    # Именованные режимы
     if k in ("w", "welcome", "splash"):
-        return "WELCOME", True
+        return "SPLASH", True
+    if k in ("dash",):
+        return "DASH", True
+    if k in ("pocket",):
+        return "POCKET", True
+    if k in ("notes",):
+        return "NOTES", True
+    if k in ("exec",):
+        return "EXEC", True
+    if k in ("config",):
+        return "CONFIG", True
+    if k in ("dev", "logs"):
+        return "DEV", True
+    if k in ("connect", "setup", "c"):
+        return "CONNECT", True
 
     # Демонстрация анимаций
     if k in ("a", "anim"):
@@ -93,13 +92,21 @@ def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
     if k in ("r", "refresh"):
         return current_mode, True
 
-    # Tab — циклическое переключение
-    if k in ("\t",):
-        order = ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]
-        if current_mode in order:
-            nxt = order[(order.index(current_mode) + 1) % len(order)]
+    # Tab / Shift+Tab — циклическое переключение вкладок
+    order = ["SPLASH", "DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]
+    if k in ("\t", "tab"):
+        norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+        if norm_mode in order:
+            nxt = order[(order.index(norm_mode) + 1) % len(order)]
             return nxt, True
-        return "DASH", True
+        return "SPLASH", True
+
+    if k in ("\x1b[z", "\x1b[z", "shift+tab"):
+        norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+        if norm_mode in order:
+            prev = order[(order.index(norm_mode) - 1) % len(order)]
+            return prev, True
+        return "CONNECT", True
 
     return current_mode, True
 
@@ -222,87 +229,126 @@ def dispatch_tui_action(
     elif mode in ("CONNECT", "SETUP"):
         from bridge_core.config import BridgeConfig
 
-        if cmd.startswith("token "):
-            new_tok = cmd[6:].strip()
-            try:
-                cfg = BridgeConfig.load()
-                cfg.update_connection(psk_token=new_tok)
-                cfg_name = cfg._config_path.name if cfg._config_path else "bridge.toml"
-                state["status_msg"] = f"[bold green][OK] Ключ безопасности сохранен в {cfg_name}[/]"
-            except Exception as e:
-                state["status_msg"] = f"[bold red][ОШИБКА СОХРАНЕНИЯ ТОКЕНА][/] {e}"
-        elif cmd in ("test", "ping", "r", "refresh"):
-            tgt_host = state.get("tgt_host", "127.0.0.1")
-            tgt_port = state.get("tgt_port", 9732)
-            is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
+        cur_port = int(state.get("tgt_port", 9732))
+        cur_host = str(state.get("tgt_host", "127.0.0.1"))
+        raw_cmd = cmd.strip()
+
+        # 1. Проверка связи (ping / test / check / r / refresh / connect без аргументов)
+        if raw_cmd.lower() in ("test", "ping", "check", "r", "refresh", "connect", ""):
+            is_online, latency = probe_target_socket(cur_host, cur_port, timeout_sec=0.5)
             state["is_online"] = is_online
             state["latency_ms"] = latency if is_online else None
             if is_online:
                 state["status_msg"] = (
-                    f"[bold green][ОНЛАЙН] Доступен {tgt_host}:{tgt_port} ({latency:.2f} мс)[/]"
+                    f"[bold green][ОНЛАЙН] Узел {cur_host}:{cur_port} "
+                    f"доступен (пинг {latency:.2f} мс)[/]"
                 )
             else:
                 state["status_msg"] = (
-                    f"[bold red][ОФФЛАЙН] Сокет {tgt_host}:{tgt_port} не отвечает[/]"
+                    f"[bold red][ОФФЛАЙН] Сокет {cur_host}:{cur_port} не отвечает[/]"
                 )
-        elif cmd in ("default", "localhost"):
-            tgt_host = "127.0.0.1"
-            tgt_port = 9732
-            is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
-            state["tgt_host"] = tgt_host
-            state["tgt_port"] = tgt_port
+            return
+
+        # 2. Обновление PSK токена безопасности
+        if raw_cmd.lower().startswith(("token ", "psk ", "key ")):
+            prefix_len = raw_cmd.find(" ") + 1
+            new_tok = raw_cmd[prefix_len:].strip()
+            try:
+                cfg = BridgeConfig.load()
+                cfg.update_connection(psk_token=new_tok)
+                if client is not None and hasattr(client, "update_target"):
+                    client.update_target(psk_token=new_tok)
+                cfg_name = cfg._config_path.name if cfg._config_path else "bridge.toml"
+                state["status_msg"] = f"[bold green][OK] Ключ безопасности сохранен в {cfg_name}[/]"
+            except Exception as e:
+                state["status_msg"] = f"[bold red][ОШИБКА СОХРАНЕНИЯ ТОКЕНА][/] {e}"
+            return
+
+        # 3. Сброс на значения по умолчанию (default / localhost / reset)
+        if raw_cmd.lower() in ("default", "localhost", "reset", "local"):
+            new_host = "127.0.0.1"
+            new_port = 9732
+            is_online, latency = probe_target_socket(new_host, new_port, timeout_sec=0.5)
+            state["tgt_host"] = new_host
+            state["tgt_port"] = new_port
+            state["tgt_address"] = f"{new_host}:{new_port}"
             state["is_online"] = is_online
             state["latency_ms"] = latency if is_online else None
             try:
                 cfg = BridgeConfig.load()
-                cfg.update_connection(host=tgt_host, port=tgt_port)
+                cfg.update_connection(host=new_host, port=new_port)
+                if client is not None and hasattr(client, "update_target"):
+                    client.update_target(host=new_host, port=new_port)
                 cfg_name = cfg._config_path.name if cfg._config_path else "bridge.toml"
                 state["status_msg"] = (
                     f"[bold green][OK] Сброшено на 127.0.0.1:9732 и записано в {cfg_name}[/]"
                 )
             except Exception as e:
                 state["status_msg"] = f"[bold red][ОШИБКА СОХРАНЕНИЯ ТОМЛ][/] {e}"
+            return
+
+        # 4. Разбор IP и порта
+        target_str = raw_cmd
+        for prefix in ("connect ", "target ", "host ", "set ", "ip "):
+            if target_str.lower().startswith(prefix):
+                target_str = target_str[len(prefix) :].strip()
+                break
+
+        target_str = target_str.replace("http://", "").replace("https://", "").strip()
+        new_host = cur_host
+        new_port = cur_port
+
+        if target_str.isdigit():
+            # Только порт, например '9732'
+            new_port = int(target_str)
+        elif target_str.startswith(":"):
+            # Порт с двоеточием, например ':9735'
+            with contextlib.suppress(ValueError):
+                new_port = int(target_str[1:].strip())
+        elif ":" in target_str:
+            # IP:порт, например '192.168.1.150:9732'
+            parts = target_str.split(":", 1)
+            new_host = parts[0].strip()
+            with contextlib.suppress(ValueError):
+                new_port = int(parts[1].strip())
+        elif " " in target_str:
+            # IP порт через пробел, например '192.168.1.150 9732'
+            parts = target_str.split(None, 1)
+            new_host = parts[0].strip()
+            with contextlib.suppress(ValueError):
+                new_port = int(parts[1].strip())
         else:
-            raw_target = cmd.replace("http://", "").replace("https://", "").strip()
-            cur_port = int(state.get("tgt_port", 9732))
-            cur_host = str(state.get("tgt_host", "127.0.0.1"))
+            # Только хост / IP, например '192.168.1.150'
+            new_host = target_str
 
-            new_host = cur_host
-            new_port = cur_port
+        if new_host.lower() == "localhost":
+            new_host = "127.0.0.1"
 
-            if raw_target.startswith(":"):
-                with contextlib.suppress(ValueError):
-                    new_port = int(raw_target[1:].strip())
-            elif ":" in raw_target:
-                parts = raw_target.split(":", 1)
-                new_host = parts[0].strip()
-                with contextlib.suppress(ValueError):
-                    new_port = int(parts[1].strip())
+        is_online, latency = probe_target_socket(new_host, new_port, timeout_sec=0.5)
+        state["tgt_host"] = new_host
+        state["tgt_port"] = new_port
+        state["tgt_address"] = f"{new_host}:{new_port}"
+        state["is_online"] = is_online
+        state["latency_ms"] = latency if is_online else None
+
+        try:
+            cfg = BridgeConfig.load()
+            cfg.update_connection(host=new_host, port=new_port)
+            if client is not None and hasattr(client, "update_target"):
+                client.update_target(host=new_host, port=new_port)
+            cfg_name = cfg._config_path.name if cfg._config_path else "bridge.toml"
+            if is_online:
+                state["status_msg"] = (
+                    f"[bold green][УСПЕШНО] Подключено к {new_host}:{new_port}! "
+                    f"ОНЛАЙН ({latency:.2f} мс). {cfg_name} обновлен.[/]"
+                )
             else:
-                new_host = raw_target
-
-            is_online, latency = probe_target_socket(new_host, new_port, timeout_sec=0.35)
-            state["tgt_host"] = new_host
-            state["tgt_port"] = new_port
-            state["is_online"] = is_online
-            state["latency_ms"] = latency if is_online else None
-
-            try:
-                cfg = BridgeConfig.load()
-                cfg.update_connection(host=new_host, port=new_port)
-                cfg_name = cfg._config_path.name if cfg._config_path else "bridge.toml"
-                if is_online:
-                    state["status_msg"] = (
-                        f"[bold green][УСПЕШНО] Подключено к {new_host}:{new_port}! "
-                        f"ОНЛАЙН ({latency:.2f} мс). {cfg_name} обновлен.[/]"
-                    )
-                else:
-                    state["status_msg"] = (
-                        f"[bold amber][СОХРАНЕНО] Адрес {new_host}:{new_port} в {cfg_name}. "
-                        f"Узел ОФФЛАЙН (проверьте Windows-агент).[/]"
-                    )
-            except Exception as e:
-                state["status_msg"] = f"[bold red][ОШИБКА СОХРАНЕНИЯ ТОМЛ][/] {e}"
+                state["status_msg"] = (
+                    f"[bold amber][СОХРАНЕНО] Адрес {new_host}:{new_port} записан в {cfg_name}. "
+                    f"Узел ОФФЛАЙН (проверьте запуск агента на Windows).[/]"
+                )
+        except Exception as e:
+            state["status_msg"] = f"[bold red][ОШИБКА СОХРАНЕНИЯ ТОМЛ][/] {e}"
 
 
 def run_interactive_tui(
@@ -325,6 +371,12 @@ def run_interactive_tui(
     state.setdefault("input_buffer", "")
     state.setdefault("status_msg", "")
 
+    if client is None:
+        with contextlib.suppress(Exception):
+            from bridge_client_linux.client import BridgeClient
+
+            client = BridgeClient()
+
     try:
         from bridge_core.config import BridgeConfig
 
@@ -340,7 +392,7 @@ def run_interactive_tui(
 
     # Честный опрос удаленного узла
     if "is_online" not in state:
-        is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.25)
+        is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.5)
         state["is_online"] = is_online
         state["latency_ms"] = latency if is_online else None
         if not is_online and not state.get("status_msg"):
@@ -384,10 +436,9 @@ def run_interactive_tui(
             # Минималистичная подсказка управления внизу
             console.print(
                 f"\n [dim]Навигация:[/] "
-                f"[bold {theme.blue}][F1..F7/Tab][/] Вкладки  "
+                f"[bold {theme.blue}][Tab][/] Вкладки  "
                 f"[bold {theme.amber}][Enter][/] Ввод  "
                 f"[bold {theme.green}][R][/] Проверить связь  "
-                f"[bold {theme.primary}][W][/] Сплэш  "
                 f"[bold {theme.red}][Ctrl+C/Q][/] Выход"
             )
 
@@ -405,57 +456,28 @@ def run_interactive_tui(
             if ch in ("\x03", "\x11"):  # Ctrl+C, Ctrl+Q
                 break
 
-            # 2. Функциональные клавиши переключения режимов
-            k_lower = ch.lower()
-            if k_lower in ("\x1bop", "\x1b[11~", "f1"):
-                current_mode = "DASH"
-                input_buffer = ""
-                continue
-            if k_lower in ("\x1boq", "\x1b[12~", "f2"):
-                current_mode = "POCKET"
-                input_buffer = ""
-                continue
-            if k_lower in ("\x1bor", "\x1b[13~", "f3"):
-                current_mode = "NOTES"
-                input_buffer = ""
-                continue
-            if k_lower in ("\x1bos", "\x1b[14~", "f4"):
-                current_mode = "EXEC"
-                input_buffer = ""
-                continue
-            if k_lower in ("\x1b[15~", "f5"):
-                current_mode = "CONFIG"
-                input_buffer = ""
-                continue
-            if k_lower in ("\x1b[17~", "f6"):
-                current_mode = "DEV"
-                input_buffer = ""
-                continue
-            if k_lower in ("\x1b[18~", "f7", "7"):
-                current_mode = "CONNECT"
-                input_buffer = ""
-                continue
-
-            # 3. Tab / Shift+Tab переключение вкладок
-            order = ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]
+            # 2. Tab / Shift+Tab переключение вкладок
+            order = ["SPLASH", "DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]
             if ch == "\t":
-                if current_mode in order:
-                    idx = order.index(current_mode)
+                norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+                if norm_mode in order:
+                    idx = order.index(norm_mode)
                     current_mode = order[(idx + 1) % len(order)]
                 else:
                     current_mode = "DASH"
                 input_buffer = ""
                 continue
-            if ch == "\x1b[z":  # Shift+Tab
-                if current_mode in order:
-                    idx = order.index(current_mode)
+            if ch in ("\x1b[z", "\x1b[Z"):  # Shift+Tab
+                norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+                if norm_mode in order:
+                    idx = order.index(norm_mode)
                     current_mode = order[(idx - 1) % len(order)]
                 else:
                     current_mode = "DASH"
                 input_buffer = ""
                 continue
 
-            # 4. Escape: очистить буфер ввода или вернуться на DASH
+            # 3. Escape: очистить буфер ввода или вернуться на DASH
             if ch == "\x1b":
                 if input_buffer:
                     input_buffer = ""
@@ -464,17 +486,19 @@ def run_interactive_tui(
                     current_mode = "DASH"
                 continue
 
-            # 5. Backspace
+            # 4. Backspace
             if ch in ("\x7f", "\x08"):
                 input_buffer = input_buffer[:-1]
                 continue
 
-            # 6. Enter: отправка команды или текста
+            # 5. Enter: отправка команды или текста
             if ch in ("\r", "\n"):
                 stripped = input_buffer.strip()
                 if stripped in (":q", ":quit", "quit", "exit"):
                     break
-                if stripped in (":1", ":dash"):
+                if stripped in (":w", ":welcome", ":splash"):
+                    current_mode = "SPLASH"
+                elif stripped in (":1", ":dash"):
                     current_mode = "DASH"
                 elif stripped in (":2", ":pocket"):
                     current_mode = "POCKET"
@@ -486,45 +510,47 @@ def run_interactive_tui(
                     current_mode = "CONFIG"
                 elif stripped in (":6", ":dev"):
                     current_mode = "DEV"
-                elif stripped in (":7", ":connect", ":setup"):
+                elif stripped in (":7", ":connect", ":setup", ":c"):
                     current_mode = "CONNECT"
-                elif stripped in (":w", ":welcome"):
-                    current_mode = "WELCOME"
                 elif stripped in (":r", ":refresh", "refresh", "r"):
-                    is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
+                    h = state.get("tgt_host", tgt_host)
+                    p = int(state.get("tgt_port", tgt_port))
+                    is_online, latency = probe_target_socket(h, p, timeout_sec=0.5)
                     state["is_online"] = is_online
                     state["latency_ms"] = latency if is_online else None
                     if is_online:
                         state["status_msg"] = (
-                            f"[bold green][ОНЛАЙН] Агент доступен (пинг {latency:.2f} мс)[/]"
+                            f"[bold green][ОНЛАЙН] Агент доступен на "
+                            f"{h}:{p} (пинг {latency:.2f} мс)[/]"
                         )
                     else:
-                        state["status_msg"] = (
-                            f"[bold red][ОФФЛАЙН] Узел {tgt_host}:{tgt_port} не отвечает.[/]"
-                        )
+                        state["status_msg"] = f"[bold red][ОФФЛАЙН] Узел {h}:{p} не отвечает.[/]"
+                elif not stripped and current_mode in ("CONNECT", "SETUP"):
+                    dispatch_tui_action("CONNECT", "", state, client)
                 elif stripped:
                     dispatch_tui_action(current_mode, stripped, state, client)
                 input_buffer = ""
                 continue
 
-            # 7. Цифры 1..7 и быстрые клавиши на экранах без активного ввода
+            # 6. Быстрые клавиши на экранах без активного ввода (R, W, Q)
             if (
-                current_mode in ("DASH", "WELCOME", "CONFIG", "DEV")
+                current_mode in ("DASH", "WELCOME", "SPLASH", "CONFIG", "DEV")
                 and not input_buffer
-                and ch in ("1", "2", "3", "4", "5", "6", "7", "w", "a", "q", "r", "R", "c", "C")
+                and ch.lower() in ("r", "q", "w")
             ):
                 if ch.lower() == "r":
-                    is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
+                    h = state.get("tgt_host", tgt_host)
+                    p = int(state.get("tgt_port", tgt_port))
+                    is_online, latency = probe_target_socket(h, p, timeout_sec=0.5)
                     state["is_online"] = is_online
                     state["latency_ms"] = latency if is_online else None
                     if is_online:
                         state["status_msg"] = (
-                            f"[bold green][ОНЛАЙН] Агент доступен (пинг {latency:.2f} мс)[/]"
+                            f"[bold green][ОНЛАЙН] Агент доступен на "
+                            f"{h}:{p} (пинг {latency:.2f} мс)[/]"
                         )
                     else:
-                        state["status_msg"] = (
-                            f"[bold red][ОФФЛАЙН] Узел {tgt_host}:{tgt_port} не отвечает.[/]"
-                        )
+                        state["status_msg"] = f"[bold red][ОФФЛАЙН] Узел {h}:{p} не отвечает.[/]"
                     continue
                 new_mode, keep_going = handle_key_action(ch, current_mode)
                 if not keep_going:

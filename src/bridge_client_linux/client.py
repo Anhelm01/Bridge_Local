@@ -126,6 +126,38 @@ class BridgeClient:
             dev_logging=self.dev_logging,
         )
 
+    def update_target(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        psk_token: str | None = None,
+    ) -> None:
+        """Динамически обновляет адрес, порт или токен целевого узла и транспорт."""
+        if host is not None:
+            self.host = host
+        if port is not None:
+            self.port = port
+        if psk_token is not None:
+            self.psk_token = psk_token
+            self.authenticator = (
+                PSKAuthenticator(psk_token=self.psk_token) if self.psk_token else None
+            )
+
+        ssl_ctx: ssl.SSLContext | None = None
+        if self.config.connection.tls_cert_path:
+            ssl_ctx = create_client_ssl_context(
+                ca_cert_path=self.config.connection.tls_cert_path,
+                insecure_no_verify=False,
+            )
+
+        self.transport = AsyncTransportClient(
+            host=self.host,
+            port=self.port,
+            connect_timeout=self.timeout_sec,
+            ssl_context=ssl_ctx,
+            dev_logging=self.dev_logging,
+        )
+
     # -----------------------------------------------------------------------
     # Управление жизненным циклом соединения
     # -----------------------------------------------------------------------

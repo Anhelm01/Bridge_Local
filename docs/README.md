@@ -11,14 +11,18 @@
 ### 1. Для разработчика и оператора (Обучалка и быстрый старт)
 - [**Обучалка по dev-взаимодействию (Пошаговый гид простыми словами)**](file:///home/anhelm/Projects/Bridge_Local/docs/DEV_GUIDE_FOR_HUMANS.md)
   *Пошаговое руководство по настройке, первому запуску, повседневному использованию, отладке, dev-режиму и решению проблем без сложной терминологии.*
+- [**Руководство оператора Linux (README_LINUX.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README_LINUX.md)
+  *Справка по установке и работе с клиентом `bridge-cli` на Linux, режимы TUI (8 вкладок с Tab-навигацией), отправка файлов и заметок, systemd.*
+- [**Руководство оператора Windows (README_WINDOWS.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README_WINDOWS.md)
+  *Справка по агенту `bridge-agent.exe` на Windows, bat-скрипты, установка службы SCM, контекстное меню Проводника, безопасность.*
 
 ### 2. Системные руководства
-- [**Руководство по развертыванию и администрированию (DEPLOYMENT.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/DEPLOYMENT.md)
-  *Установка Windows SCM службы, настройка Windows Defender и Брандмауэра, интеграция в контекстное меню Explorer, системные юниты systemd на Linux.*
+- [**Руководство по развертыванию и сборке с 0 (DEPLOYMENT.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/DEPLOYMENT.md)
+  *Четкая пошаговая инструкция по сборке пакетов и первому запуску с нуля на обеих ОС без лишней воды.*
 - [**Справочник по конфигурации (CONFIGURATION.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/CONFIGURATION.md)
-  *Подробное описание всех секций `bridge.toml`: [node], [network], [security], [pocket], [notes], [executor], [logging], каскадный поиск и переменные окружения.*
+  *Подробное описание всех секций `bridge.toml`: [node], [connection], [pocket], [exec], [logging], каскадный поиск и переменные окружения.*
 - [**Справочник интерфейса командной строки (CLI_REFERENCE.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/CLI_REFERENCE.md)
-  *Полный каталог команд `bridge-cli` и `bridge-agent`, флаги, детерминированный `--json` режим, коды завершения (Exit Codes) и горячие клавиши TUI.*
+  *Полный каталог команд `bridge-cli` (включая connect, setup, tui) и `bridge-agent`, флаги, детерминированный `--json` режим, коды завершения (Exit Codes) и горячие клавиши TUI.*
 
 ### 3. Архитектура и спецификации
 - [**Архитектурный обзор платформы (ARCHITECTURE.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/ARCHITECTURE.md)

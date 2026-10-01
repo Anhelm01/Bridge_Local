@@ -5,12 +5,21 @@
 
 [![CI](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml/badge.svg)](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.14-00D2FF.svg)
-![Tests](https://img.shields.io/badge/tests-311%20passed-00FF66.svg)
+![Tests](https://img.shields.io/badge/tests-312%20passed-00FF66.svg)
 ![Mypy](https://img.shields.io/badge/mypy-strict-7D8590.svg)
 ![Ruff](https://img.shields.io/badge/code%20style-ruff-black.svg)
 ![Architecture](https://img.shields.io/badge/architecture-modular%20platform-blue.svg)
 
-> **Status:** Phase 7 Complete & Deployed [OK] | 311 tests passing (100% green) | Wheel Packaging & Windows SCM Service Ready.
+> **Status:** Release v0.1.0 Ready | 312 tests passing (100% green) | Standalone Windows & Linux ZIP distributions available.
+
+---
+
+## Operator Guides & Documentation
+
+- [**Linux Operator Guide (docs/README_LINUX.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README_LINUX.md) — standalone `bridge-cli` setup, TUI navigation, systemd.
+- [**Windows Operator Guide (docs/README_WINDOWS.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README_WINDOWS.md) — `bridge-agent.exe`, SCM service, setup wizard, context menu.
+- [**Deployment & Build Guide (docs/DEPLOYMENT.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/DEPLOYMENT.md) — step-by-step from scratch build & launch.
+- [**Documentation Portal (docs/README.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README.md) — central documentation index.
 
 ---
 
@@ -45,7 +54,7 @@
 
 ### 1. Linux CLI & AI Operator Interface (`bridge-cli`)
 - **Dual Target Persona:**
-  - **Human Ergonomics:** Interactive TUI with `[F1..F6]` / `Tab` navigation, localized non-flickering Braille animations (`⠋⠙⠹...`, `[>>>]`), and Neofetch splash.
+  - **Human Ergonomics:** Interactive TUI with 8 tabs (`Tab` / `Shift+Tab` navigation), localized non-flickering Braille animations (`⠋⠙⠹...`, `[>>>]`), and Neofetch splash.
   - **AI Operator Protocol (`agy_cli`):** Fully deterministic `--json` output, zero ANSI-escape artifacts, non-blocking execution, and standardized exit codes:
     - `0` (`SUCCESS`): Command executed successfully.
     - `1` (`GENERAL_ERROR`): Invalid arguments or internal failure.
@@ -79,10 +88,10 @@
 ## Quick Start (CLI Usage)
 
 ```bash
-# 1. Full-screen Neofetch splash with BRIDGES Master emblem:
-bridge-cli welcome
+# 1. Connect and save Windows target IP:port directly:
+bridge-cli connect 192.168.1.150:9732
 
-# 2. Interactive TUI with Drawbridge header & [F1..F6] tabs (DASH, POCKET, NOTES, EXEC, CONFIG, DEV):
+# 2. Interactive TUI with 8 tabs (SPLASH, DASH, POCKET, NOTES, EXEC, CONFIG, DEV, CONNECT):
 bridge-cli tui
 
 # 3. Check node status (Human table vs AI JSON):
@@ -106,8 +115,8 @@ bridge-cli note send "https://github.com/project/spec" --json
 bridge-cli note list --limit 10 --json
 bridge-cli note read <note_id> --json
 
-# 8. Windows Explorer Context Menu:
-# Right-click any file/folder in Windows Explorer to drop directly into Pocket.
+# 8. Windows Explorer Context Menu & Setup:
+bridge-agent setup                   # Interactive setup wizard with IPv4 auto-detection
 bridge-agent install-context-menu    # Register right-click menu in HKCU
 bridge-agent drop <file_or_dir>      # CLI drop helper
 ```

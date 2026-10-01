@@ -14,9 +14,9 @@
 | **3** | **Windows Agent & Служба** | `[OK]` | PowerShell Runner (UTF-8, chcp 65001), Process Tree Killer, Windows Service SCM, 122 теста |
 | **4** | **«Карман» и «Записки»** | `[OK]` | Чанковая передача (64 КБ), SHA-256 сверка, атомарная запись .part, Notes JSONL, 146 тестов |
 | **4.5**| **UI/UX & Визуальный стиль** | `[OK]` | Тема Titanium Vivid, Neofetch splash, анимации процессов без мерцания, TUI |
-| **5** | **Linux Client CLI & TUI** | `[OK]` | Typer CLI (bridge-cli), Headless JSON, Exit Codes 0..5, TUI 6 вкладок, 177 тестов |
+| **5** | **Linux Client CLI & TUI** | `[OK]` | Typer CLI (bridge-cli), Headless JSON, Exit Codes 0..5, TUI 8 вкладок (Tab-навигация), 177 тестов |
 | **6** | **Отказоустойчивость & Стресс** | `[OK]` | Докачка файлов (.part offset), Windows Sharing Violation retry, Addams Family аудит, 286 тестов |
-| **7** | **Сборка, упаковка и релиз** | `[OK]` | Wheel сборка, PyInstaller .exe spec, SCM служба, Defender/Firewall скрипты, 311 тестов |
+| **7** | **Сборка, упаковка и релиз** | `[OK]` | Wheel сборка, PyInstaller .exe spec, SCM служба, Defender/Firewall скрипты, 312 тестов |
 
 ---
 

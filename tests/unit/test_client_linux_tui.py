@@ -10,6 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bridge_client_linux.tui import (
@@ -47,35 +48,38 @@ def test_tui_official_theme_properties() -> None:
 
 def test_tui_key_actions() -> None:
     """Проверяет работу диспетчера клавиатурных событий."""
-    # Цифровые клавиши 1..7
-    assert handle_key_action("1", "POCKET") == ("DASH", True)
-    assert handle_key_action("2", "DASH") == ("POCKET", True)
-    assert handle_key_action("3", "DASH") == ("NOTES", True)
-    assert handle_key_action("4", "DASH") == ("EXEC", True)
-    assert handle_key_action("5", "DASH") == ("CONFIG", True)
-    assert handle_key_action("6", "DASH") == ("DEV", True)
-    assert handle_key_action("7", "DASH") == ("CONNECT", True)
-
-    # Функциональные клавиши F1..F7 (escape-последовательности)
-    assert handle_key_action("\x1bOP", "DASH") == ("DASH", True)
-    assert handle_key_action("\x1bOQ", "DASH") == ("POCKET", True)
-    assert handle_key_action("\x1bOR", "DASH") == ("NOTES", True)
-    assert handle_key_action("\x1bOS", "DASH") == ("EXEC", True)
-    assert handle_key_action("\x1b[15~", "DASH") == ("CONFIG", True)
-    assert handle_key_action("\x1b[17~", "DASH") == ("DEV", True)
-    assert handle_key_action("\x1b[18~", "DASH") == ("CONNECT", True)
-
     # Именованные режимы
+    assert handle_key_action("splash", "DASH") == ("SPLASH", True)
+    assert handle_key_action("welcome", "DASH") == ("SPLASH", True)
+    assert handle_key_action("w", "DASH") == ("SPLASH", True)
     assert handle_key_action("dash", "POCKET") == ("DASH", True)
     assert handle_key_action("pocket", "DASH") == ("POCKET", True)
+    assert handle_key_action("notes", "DASH") == ("NOTES", True)
+    assert handle_key_action("exec", "DASH") == ("EXEC", True)
+    assert handle_key_action("config", "DASH") == ("CONFIG", True)
+    assert handle_key_action("dev", "DASH") == ("DEV", True)
     assert handle_key_action("connect", "DASH") == ("CONNECT", True)
-    assert handle_key_action("w", "DASH") == ("WELCOME", True)
     assert handle_key_action("a", "DASH") == ("ANIM", True)
 
-    # Tab cycling
+    # Функциональные клавиши F1..F7 сняты (не должны переключать режимы)
+    assert handle_key_action("\x1bOP", "DASH") == ("DASH", True)
+    assert handle_key_action("\x1bOQ", "DASH") == ("DASH", True)
+    assert handle_key_action("f1", "DASH") == ("DASH", True)
+    assert handle_key_action("f7", "DASH") == ("DASH", True)
+
+    # Tab cycling (полный круг через сплэш и 7 оперативных окон)
+    assert handle_key_action("\t", "SPLASH") == ("DASH", True)
     assert handle_key_action("\t", "DASH") == ("POCKET", True)
+    assert handle_key_action("\t", "POCKET") == ("NOTES", True)
+    assert handle_key_action("\t", "NOTES") == ("EXEC", True)
+    assert handle_key_action("\t", "EXEC") == ("CONFIG", True)
+    assert handle_key_action("\t", "CONFIG") == ("DEV", True)
     assert handle_key_action("\t", "DEV") == ("CONNECT", True)
-    assert handle_key_action("\t", "CONNECT") == ("DASH", True)
+    assert handle_key_action("\t", "CONNECT") == ("SPLASH", True)
+
+    # Shift+Tab обратный цикл
+    assert handle_key_action("\x1b[Z", "SPLASH") == ("CONNECT", True)
+    assert handle_key_action("\x1b[Z", "DASH") == ("SPLASH", True)
 
     # Выход
     assert handle_key_action("q", "DASH") == ("DASH", False)
@@ -98,7 +102,7 @@ def test_tui_render_modes_without_errors() -> None:
     render_connect_mode(theme)
     render_theme_spec(theme)
 
-    for m in ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT", "WELCOME"]:
+    for m in ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT", "WELCOME", "SPLASH"]:
         render_current_mode(m, theme)
 
 
@@ -178,3 +182,99 @@ def test_tui_dispatch_action(tmp_path) -> None:
     assert len(state["notes_list"]) == 1
     assert state["notes_list"][0]["text"] == "Привет на Windows!"
     assert "Заметка отправлена" in state["status_msg"]
+
+
+def test_tui_connect_mode_parsing_and_client_sync() -> None:
+    """Проверяет обработку команд в режиме CONNECT и обновление клиента."""
+    mock_client = MagicMock()
+    mock_client.update_target = MagicMock()
+
+    state: dict[str, Any] = {
+        "tgt_host": "192.168.100.2",
+        "tgt_port": 9732,
+        "is_online": False,
+        "status_msg": "",
+    }
+
+    # 1. Проверка команды тестирования связи (test / ping / connect / пустая строка)
+    with patch("bridge_client_linux.tui.app.probe_target_socket", return_value=(True, 0.42)):
+        dispatch_tui_action("CONNECT", "test", state, client=mock_client)
+        assert state["is_online"] is True
+        assert state["latency_ms"] == 0.42
+        assert "[ОНЛАЙН]" in state["status_msg"]
+
+    # 2. Обновление только IP (сохраняет текущий порт)
+    with (
+        patch("bridge_client_linux.tui.app.probe_target_socket", return_value=(False, 0.0)),
+        patch("bridge_core.config.BridgeConfig.update_connection") as mock_upd,
+    ):
+        dispatch_tui_action("CONNECT", "192.168.1.55", state, client=mock_client)
+        assert state["tgt_host"] == "192.168.1.55"
+        assert state["tgt_port"] == 9732
+        mock_client.update_target.assert_called_with(host="192.168.1.55", port=9732)
+        mock_upd.assert_called_with(host="192.168.1.55", port=9732)
+
+    # 3. Обновление IP и порта через двоеточие
+    with (
+        patch("bridge_client_linux.tui.app.probe_target_socket", return_value=(True, 1.25)),
+        patch("bridge_core.config.BridgeConfig.update_connection"),
+    ):
+        dispatch_tui_action("CONNECT", "10.0.0.12:9800", state, client=mock_client)
+        assert state["tgt_host"] == "10.0.0.12"
+        assert state["tgt_port"] == 9800
+        assert state["is_online"] is True
+        mock_client.update_target.assert_called_with(host="10.0.0.12", port=9800)
+
+    # 4. Обновление IP и порта через пробел
+    with (
+        patch("bridge_client_linux.tui.app.probe_target_socket", return_value=(True, 1.10)),
+        patch("bridge_core.config.BridgeConfig.update_connection"),
+    ):
+        dispatch_tui_action("CONNECT", "connect 172.16.0.5 9900", state, client=mock_client)
+        assert state["tgt_host"] == "172.16.0.5"
+        assert state["tgt_port"] == 9900
+
+    # 5. Обновление только порта (число или :порт)
+    with (
+        patch("bridge_client_linux.tui.app.probe_target_socket", return_value=(True, 0.9)),
+        patch("bridge_core.config.BridgeConfig.update_connection"),
+    ):
+        dispatch_tui_action("CONNECT", "9755", state, client=mock_client)
+        assert state["tgt_host"] == "172.16.0.5"
+        assert state["tgt_port"] == 9755
+
+    # 6. Сброс на localhost
+    with (
+        patch("bridge_client_linux.tui.app.probe_target_socket", return_value=(True, 0.2)),
+        patch("bridge_core.config.BridgeConfig.update_connection"),
+    ):
+        dispatch_tui_action("CONNECT", "default", state, client=mock_client)
+        assert state["tgt_host"] == "127.0.0.1"
+        assert state["tgt_port"] == 9732
+
+    # 7. Обновление токена безопасности
+    with patch("bridge_core.config.BridgeConfig.update_connection") as mock_upd:
+        dispatch_tui_action("CONNECT", "token SecretPsk999", state, client=mock_client)
+        mock_client.update_target.assert_called_with(psk_token="SecretPsk999")
+        mock_upd.assert_called_with(psk_token="SecretPsk999")
+        assert "Ключ безопасности сохранен" in state["status_msg"]
+
+
+def test_bridge_client_update_target_live() -> None:
+    """Проверяет реальную переинициализацию транспорта в BridgeClient.update_target."""
+    from bridge_client_linux.client import BridgeClient
+    from bridge_core.config import BridgeConfig
+
+    client = BridgeClient(config=BridgeConfig(), host="192.168.1.1", port=9732)
+    assert client.host == "192.168.1.1"
+    assert client.port == 9732
+    assert client.transport.host == "192.168.1.1"
+    assert client.transport.port == 9732
+
+    client.update_target(host="10.0.0.99", port=9800, psk_token="NewToken123")
+    assert client.host == "10.0.0.99"
+    assert client.port == 9800
+    assert client.psk_token == "NewToken123"
+    assert client.transport.host == "10.0.0.99"
+    assert client.transport.port == 9800
+    assert client.authenticator is not None

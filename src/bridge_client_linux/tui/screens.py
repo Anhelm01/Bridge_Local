@@ -4,13 +4,15 @@ bridge_client_linux.tui.screens — Отрисовка экранов и раб�
 Реализует:
   1. Full-screen Neofetch экран приветствия (BRIDGES Master).
   2. Шапку оперативных окон DRAWBRIDGE Industrial.
-  3. Вкладки [F1..F6] / [1..6]:
+  3. Вкладки [Tab / Shift+Tab]:
+     - SPLASH: экран приветствия и Neofetch
      - DASH: сводный дашборд сети, узлов и очередей
      - POCKET: список и статус хранилища кармана (реальные файлы с диска)
      - NOTES: лента быстрых заметок (реальные записи из notes.jsonl)
      - EXEC: удалённый терминал PowerShell
      - CONFIG: реестр узлов и параметры подключения
      - DEV: журнал трассировки и логов
+     - CONNECT: быстрое подключение и настройка узла без правки TOML
 """
 
 from __future__ import annotations
@@ -93,9 +95,11 @@ def get_live_context(custom_data: dict[str, Any] | None = None) -> dict[str, Any
     src_ip = d.get("node", {}).get("src_ip") or get_local_ip()
 
     tgt_node = d.get("node", {}).get("target") or "WIN-PC"
-    tgt_host = d.get("node", {}).get("host") or cfg.connection.host or "192.168.100.2"
-    tgt_port = d.get("node", {}).get("port") or cfg.connection.port or 9732
-    tgt_address = f"{tgt_host}:{tgt_port}"
+    tgt_host = (
+        d.get("tgt_host") or d.get("node", {}).get("host") or cfg.connection.host or "192.168.100.2"
+    )
+    tgt_port = d.get("tgt_port") or d.get("node", {}).get("port") or cfg.connection.port or 9732
+    tgt_address = d.get("tgt_address") or f"{tgt_host}:{tgt_port}"
 
     # Честный статус связи: False по умолчанию (пока явно не подтвержден опрос)
     is_online = bool(d.get("is_online", False))
@@ -236,11 +240,37 @@ def get_live_context(custom_data: dict[str, Any] | None = None) -> dict[str, Any
     }
 
 
+def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> None:
+    """Верхний таб-бар переключения режимов с поддержкой навигации по Tab."""
+    modes = [
+        "SPLASH",
+        "DASH",
+        "POCKET",
+        "NOTES",
+        "EXEC",
+        "CONFIG",
+        "DEV",
+        "CONNECT",
+    ]
+    bar = Text()
+    bar.append("[BRIDGE] ", style=f"bold black on {theme.blue}")
+    for i, name in enumerate(modes):
+        if name == active_mode or (name == "SPLASH" and active_mode == "WELCOME"):
+            bar.append(f"█ [{name}]", style="bold white on #1F6FEB")
+        else:
+            bar.append(f"[{name}]", style=f"dim {theme.secondary}")
+        if i < len(modes) - 1:
+            bar.append(" │ ")
+    bar.append("  [dim](Навигация: Tab / Shift+Tab)[/]")
+    console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
+
+
 def render_welcome_screen(
     theme: PaletteTheme = OFFICIAL_THEME,
     status_data: dict[str, Any] | None = None,
 ) -> None:
     """Выводит экран Neofetch с BRIDGES Master и честным статусом."""
+    render_mode_tabs("SPLASH", theme)
     term_width, _ = shutil.get_terminal_size((120, 40))
 
     p = theme.primary
@@ -409,35 +439,11 @@ def render_operational_header(
     )
 
 
-def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> None:
-    """Верхний таб-бар переключения режимов с поддержкой функциональных клавиш F1..F7."""
-    modes = [
-        ("DASH", "F1"),
-        ("POCKET", "F2"),
-        ("NOTES", "F3"),
-        ("EXEC", "F4"),
-        ("CONFIG", "F5"),
-        ("DEV", "F6"),
-        ("CONNECT", "F7"),
-    ]
-    bar = Text()
-    bar.append("[BRIDGE] ", style=f"bold black on {theme.blue}")
-    for i, (name, key) in enumerate(modes):
-        if name == active_mode:
-            bar.append(f"█ [{key}:{name}]", style="bold white on #1F6FEB")
-        else:
-            bar.append(f"[{key}:{name}]", style=f"dim {theme.secondary}")
-        if i < len(modes) - 1:
-            bar.append(" │ ")
-    bar.append("  [dim](Переключение: Tab / F1..F7)[/]")
-    console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
-
-
 def render_dashboard_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 1: DASHBOARD / СТАТУС (F1)."""
+    """Режим DASHBOARD / СТАТУС."""
     ctx = get_live_context(data)
     render_operational_header(theme, ctx)
     render_mode_tabs("DASH", theme)
@@ -507,9 +513,7 @@ def render_dashboard_mode(
     console.print(
         Panel(
             prompt_bar,
-            title=(
-                "[dim][F1..F6] Вкладки | :send <f> | :exec <cmd> | :r Обновить | :q Выход[/dim]"
-            ),
+            title=("[dim][Tab] Вкладки | :send <f> | :exec <cmd> | :r Обновить | :q Выход[/dim]"),
             border_style=theme.blue if input_buf else theme.secondary,
             padding=0,
         )
@@ -522,7 +526,7 @@ def render_pocket_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     pocket_data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 2: POCKET / КАРМАН (F2)."""
+    """Режим POCKET / КАРМАН."""
     ctx = get_live_context(pocket_data)
     render_operational_header(theme, ctx)
     render_mode_tabs("POCKET", theme)
@@ -582,7 +586,7 @@ def render_notes_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     notes_data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 3: NOTES / ЗАМЕТКИ (F3)."""
+    """Режим NOTES / ЗАМЕТКИ."""
     ctx = get_live_context(notes_data)
     render_operational_header(theme, ctx)
     render_mode_tabs("NOTES", theme)
@@ -611,7 +615,7 @@ def render_notes_mode(
         "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
     )
     feed_lines.append(
-        "[bold white]Ввод заметки ([Enter] Отправить на все узлы | [Tab/F1..F6] Навигация):[/]"
+        "[bold white]Ввод заметки ([Enter] Отправить на все узлы | [Tab] Навигация):[/]"
     )
     feed_lines.append(f"[bold {theme.blue}]NOTE > [/][bold white]{input_buf}[/][blink]█[/]")
     if status_msg:
@@ -632,8 +636,8 @@ def render_notes_mode(
 
 [bold {theme.blue}]УПРАВЛЕНИЕ:[/][dim]
  [Enter] Отправить заметку
- [F1..F6] Сменить вкладку
- [Tab] Следующая вкладка
+ [Tab] Сменить вкладку
+ [Shift+Tab] Предыдущая вкладка
  [Ctrl+C] Выход[/dim]""",
         title="[bold white][ ИНФО / СТАТИСТИКА ][/]",
         border_style=theme.secondary,
@@ -647,7 +651,7 @@ def render_exec_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     exec_data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 4: REMOTE EXEC / КОНСОЛЬ (F4)."""
+    """Режим REMOTE EXEC / КОНСОЛЬ."""
     ctx = get_live_context(exec_data)
     render_operational_header(theme, ctx)
     render_mode_tabs("EXEC", theme)
@@ -696,7 +700,7 @@ def render_exec_mode(
         "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
     )
     lines.append(
-        "[bold white]Ввод команды ([Enter] Выполнить | [F1..F6/Tab] Навигация | [Ctrl+C] Выход):[/]"
+        "[bold white]Ввод команды ([Enter] Выполнить | [Tab] Навигация | [Ctrl+C] Выход):[/]"
     )
     lines.append(
         f"[bold {theme.blue}]PS C:\\BridgeService> [/][bold white]{input_buf}[/][blink]█[/]"
@@ -717,7 +721,7 @@ def render_config_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     config_data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 5: CONFIG / УЗЛЫ (F5)."""
+    """Режим CONFIG / УЗЛЫ."""
     ctx = get_live_context(config_data)
     render_operational_header(theme, ctx)
     render_mode_tabs("CONFIG", theme)
@@ -761,7 +765,7 @@ def render_dev_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     logs_data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 6: DEV / LOGS — Трассировка ядра и логов (F6)."""
+    """Режим DEV / LOGS — Трассировка ядра и логов."""
     ctx = get_live_context(logs_data)
     render_operational_header(theme, ctx)
     render_mode_tabs("DEV", theme)
@@ -793,7 +797,7 @@ def render_dev_mode(
         f"[bold {b}][EXEC][/]    PowerShell: UTF-8 chcp 65001, timeout={ex_tout}s",
         f"[bold {g}][HEART][/]   Интервал: {hb_iv}s, fail-fast: {hb_ff}ms",
         "[dim]───────────────────────────────────────────────────────────────────[/]",
-        "[bold white]Управление: [R] Перепроверить связь | [1..6] Вкладки | [Q] Выход[/]",
+        "[bold white]Управление: [R] Перепроверить связь | [Tab] Вкладки | [Q] Выход[/]",
     ]
 
     logs_feed = Panel(
@@ -828,7 +832,7 @@ def render_connect_mode(
     theme: PaletteTheme = OFFICIAL_THEME,
     data: dict[str, Any] | None = None,
 ) -> None:
-    """Режим 7: CONNECT / БЫСТРОЕ ПОДКЛЮЧЕНИЕ К УЗЛУ (F7)."""
+    """Режим CONNECT / БЫСТРОЕ ПОДКЛЮЧЕНИЕ К УЗЛУ."""
     ctx = get_live_context(data)
     render_operational_header(theme, ctx)
     render_mode_tabs("CONNECT", theme)
@@ -865,8 +869,8 @@ def render_connect_mode(
         "",
         "[dim]─────────────────────────────────────────────────────────────────────────────[/]",
         f"  [bold {theme.green}]192.168.1.150:9732[/]  -> записать IP и порт и проверить связь",
-        f"  [bold {theme.green}]192.168.1.150[/]       -> обновить только IP",
-        f"  [bold {theme.green}]:9740[/]                -> изменить только порт",
+        f"  [bold {theme.green}]192.168.1.150[/]       -> обновить только IP (сохранить порт)",
+        f"  [bold {theme.green}]9732[/] или [bold {theme.green}]:9732[/]    -> изменить TCP-порт",
         f"  [bold {theme.green}]token <ключ>[/]        -> обновить ключ безопасности PSK",
         f"  [bold {theme.green}]test[/] / [bold {theme.green}][R][/]          -> проверить связь",
     ]
@@ -992,7 +996,7 @@ def render_current_mode(
         render_dev_mode(theme, data)
     elif m in ("CONNECT", "SETUP"):
         render_connect_mode(theme, data)
-    elif m == "WELCOME":
+    elif m in ("WELCOME", "SPLASH"):
         render_welcome_screen(theme, data)
     elif m == "ANIM":
         demo_process_animations(theme)
