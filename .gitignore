@@ -12,3 +12,7 @@ wheels/
 # Local personal explainers and notes (not for git)
 explainers/
 scenarios/
+
+# Pocket storage runtime files
+pocket/
+*.log

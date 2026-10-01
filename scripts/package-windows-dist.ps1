@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Сборка релизного пакета Bridge Local для Windows (BridgeLocal-Windows-x64.zip).
 #>

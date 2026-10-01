@@ -505,7 +505,7 @@ def main_standalone() -> None:
 
     try:
         asyncio.run(service.run_forever())
-    except KeyboardInterrupt, SystemExit:
+    except (KeyboardInterrupt, SystemExit):
         logger.info("[SERVICE] Остановка по сигналу прерывания")
 
 

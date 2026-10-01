@@ -58,9 +58,21 @@ def find_bridge_config(explicit_path: Path | str | None = None) -> Path | None:
         return repo_cfg
 
     # 2. Рядом с исполняемым файлом
-    exe_cfg = Path(sys.executable).parent / "bridge.toml"
-    if exe_cfg.exists():
-        return exe_cfg
+    exe_p = Path(sys.executable).resolve()
+    if (exe_p.parent / "bridge.toml").exists():
+        return exe_p.parent / "bridge.toml"
+
+    # 2b. На один уровень выше (если exe в каталоге dist/)
+    if (exe_p.parent.parent / "bridge.toml").exists():
+        return exe_p.parent.parent / "bridge.toml"
+
+    # 2c. По пути запуска процесса argv[0]
+    if sys.argv and sys.argv[0]:
+        argv_p = Path(sys.argv[0]).resolve()
+        if (argv_p.parent / "bridge.toml").exists():
+            return argv_p.parent / "bridge.toml"
+        if (argv_p.parent.parent / "bridge.toml").exists():
+            return argv_p.parent.parent / "bridge.toml"
 
     # 3. В C:\BridgeLocal\bridge.toml
     if sys.platform == "win32":
@@ -245,9 +257,12 @@ def drop_file_to_pocket(
     Когда файл попадает в Карман, служба Windows (Watchdog) и клиент Linux
     синхронизируют его по локальной сети.
     """
-    src = Path(file_path).resolve()
+    clean_path = str(file_path).strip().strip('"').strip("'")
+    if len(clean_path) > 3 and clean_path.endswith("\\") and not clean_path.endswith(":\\"):
+        clean_path = clean_path.rstrip("\\")
+    src = Path(clean_path).resolve()
     if not src.exists():
-        msg = f"Файл или каталог не найден: {src}"
+        msg = f"Файл или каталог не найден: {clean_path}"
         if show_alert:
             show_windows_alert("Bridge Local - Ошибка", msg, is_error=True)
         raise FileNotFoundError(msg)
@@ -260,15 +275,22 @@ def drop_file_to_pocket(
         pocket_dir = raw_pocket.resolve()
     else:
         # Привязываем относительный путь к каталогу найденного bridge.toml
-        base_dir = (
-            cfg_file.parent
-            if cfg_file
-            else (
-                Path(__file__).resolve().parent.parent.parent
-                if (Path(__file__).resolve().parent.parent.parent / "bridge.toml").exists()
-                else Path.cwd()
-            )
-        )
+        if cfg_file:
+            base_dir = cfg_file.parent
+        else:
+            exe_p = Path(sys.executable).resolve()
+            if (exe_p.parent.parent / "pocket").exists():
+                base_dir = exe_p.parent.parent
+            elif (exe_p.parent / "pocket").exists():
+                base_dir = exe_p.parent
+            elif Path(r"C:\BridgeLocal\pocket").exists():
+                base_dir = Path(r"C:\BridgeLocal")
+            else:
+                base_dir = (
+                    Path(__file__).resolve().parent.parent.parent
+                    if (Path(__file__).resolve().parent.parent.parent / "bridge.toml").exists()
+                    else Path.cwd()
+                )
         pocket_dir = (base_dir / raw_pocket).resolve()
 
     pocket_dir.mkdir(parents=True, exist_ok=True)
@@ -277,12 +299,17 @@ def drop_file_to_pocket(
     try:
         if src.is_dir():
             if dest.exists():
-                shutil.rmtree(dest)
+                shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(src, dest)
         else:
             # Для файлов: атомарное копирование через временный файл
-            part = pocket_dir / f".{src.name}.part"
+            part = pocket_dir / f".{src.name}.{os.getpid()}.part"
             shutil.copy2(src, part)
+            if dest.exists() and dest.is_file():
+                try:
+                    dest.unlink()
+                except OSError:
+                    pass
             os.replace(part, dest)
 
         logger.info("[POCKET-DROP] Объект '%s' успешно скопирован в карман: %s", src.name, dest)

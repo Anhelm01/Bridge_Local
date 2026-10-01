@@ -87,7 +87,8 @@ class BridgeClient:
         dev_logging: bool | None = None,
     ) -> None:
         self.config = config or BridgeConfig.load()
-        self.host = host or self.config.connection.host
+        raw_host = host or self.config.connection.host
+        self.host = "127.0.0.1" if raw_host == "0.0.0.0" else raw_host
         self.port = port if port is not None else self.config.connection.port
         self.timeout_sec = (
             timeout_sec if timeout_sec is not None else self.config.connection.timeout_sec
@@ -134,7 +135,7 @@ class BridgeClient:
     ) -> None:
         """Динамически обновляет адрес, порт или токен целевого узла и транспорт."""
         if host is not None:
-            self.host = host
+            self.host = "127.0.0.1" if host == "0.0.0.0" else host
         if port is not None:
             self.port = port
         if psk_token is not None:
@@ -367,8 +368,19 @@ class BridgeClient:
             PocketSyncSummary со статистикой передачи.
         """
         # Используем существующий проверенный механизм синхронизации из bridge_core
+        # с поддержкой PSK-аутентификации через _call
+        class _AuthenticatedAdapter:
+            def __init__(self, bc: BridgeClient, target: str | None) -> None:
+                self._bc = bc
+                self._target = target
+
+            async def call(
+                self, method: str, params: dict[str, Any] | None = None, **kwargs: Any
+            ) -> Any:
+                return await self._bc._call(method, params=params, target_node=self._target)
+
         return await sync_pocket(
-            client=self.transport,
+            client=_AuthenticatedAdapter(self, target_node),  # type: ignore[arg-type]
             local_manager=self.pocket_manager,
             direction=direction,
             chunk_size=chunk_size,

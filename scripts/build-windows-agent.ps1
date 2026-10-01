@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Сборка автономного исполняемого файла Windows-агента (bridge-agent.exe) с помощью PyInstaller.
 
@@ -47,6 +47,7 @@ if ($Clean) {
     if (Test-Path (Join-Path $distDir "bridge-agent.exe")) {
         Remove-Item -Path (Join-Path $distDir "bridge-agent.exe") -Force -ErrorAction SilentlyContinue
     }
+}
 # Проверка и инициализация системных компонентов pywin32
 try {
     $postinstallCmd = Get-Command "pywin32_postinstall.py" -ErrorAction SilentlyContinue
@@ -75,6 +76,7 @@ if (-not $pyinstallerCmd) {
 
 $outputExe = Join-Path $repoRoot "dist\bridge-agent.exe"
 if (Test-Path $outputExe) {
+    Copy-Item (Join-Path $repoRoot "bridge.toml") -Destination (Join-Path $repoRoot "dist\bridge.toml") -Force -ErrorAction SilentlyContinue
     $fileInfo = Get-Item $outputExe
     $sizeMb = [Math]::Round($fileInfo.Length / 1MB, 2)
     $hash = (Get-FileHash -Path $outputExe -Algorithm SHA256).Hash

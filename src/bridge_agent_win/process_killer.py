@@ -67,7 +67,7 @@ def kill_process_tree(pid: int, timeout_sec: float = 3.0) -> list[int]:
                         ):
                             break
                         time.sleep(0.01)
-                    except psutil.NoSuchProcess, psutil.AccessDenied:
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         break
 
             # Финальная зачистка: если кто-то остался жив, добиваем
@@ -129,7 +129,7 @@ def kill_process_tree(pid: int, timeout_sec: float = 3.0) -> list[int]:
                 os.killpg(pgid, signal.SIGKILL)
             else:
                 os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError, PermissionError:
+        except (ProcessLookupError, PermissionError):
             with contextlib.suppress(ProcessLookupError, PermissionError):
                 os.kill(pid, signal.SIGKILL)
 

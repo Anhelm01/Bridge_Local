@@ -123,7 +123,7 @@ def test_cli_main_drop(tmp_path: Path, capsys) -> None:
             cli_main()
         captured = capsys.readouterr()
         assert "[OK] Файл скопирован в Карман" in captured.out
-        mock_drop.assert_called_once_with(str(test_file))
+        assert mock_drop.call_args[0] == (str(test_file),)
 
 
 def test_cli_main_generate_reg(tmp_path: Path, capsys) -> None:

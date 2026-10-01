@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Установка и регистрация системной службы Bridge Local Agent в Windows SCM.
 

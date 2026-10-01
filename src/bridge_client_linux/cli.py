@@ -60,7 +60,13 @@ app.add_typer(pocket_app, name="pocket")
 app.add_typer(note_app, name="note")
 app.add_typer(config_app, name="config")
 
-console = Console()
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+console = Console(legacy_windows=False if sys.platform == "win32" else None)
 
 
 def _run[T](coro: Coroutine[Any, Any, T]) -> T:

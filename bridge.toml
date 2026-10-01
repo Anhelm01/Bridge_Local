@@ -3,7 +3,7 @@ name = "workstation-linux"
 display_name = "Linux Host"
 
 [connection]
-host = "172.20.10.2"
+host = "0.0.0.0"
 port = 9732
 timeout_sec = 5.0
 tls_cert_path = ""

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Корректная остановка и удаление службы Bridge Local Agent из Windows SCM.
 

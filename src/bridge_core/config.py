@@ -205,7 +205,13 @@ class BridgeConfig(BaseModel):
             candidate_paths: list[Path] = [
                 DEFAULT_CONFIG_PATH,
                 Path(sys.executable).parent / "bridge.toml",
+                Path(sys.executable).parent.parent / "bridge.toml",
             ]
+            try:
+                candidate_paths.append(Path(__file__).resolve().parent.parent.parent / "bridge.toml")
+            except Exception:
+                pass
+
             if sys.platform == "win32":
                 candidate_paths.append(Path(r"C:\BridgeLocal\bridge.toml"))
             else:
