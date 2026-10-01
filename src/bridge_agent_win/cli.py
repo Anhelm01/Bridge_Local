@@ -160,8 +160,11 @@ def handle_config_command(args: list[str]) -> None:
 
 def main() -> None:
     """Главная точка входа bridge-agent."""
+    args = sys.argv[1:]
+
     # Проверка запуска в качестве системной службы Windows SCM
-    if HAS_WIN32SERVICE:
+    # Выполняется только если процесс вызван без аргументов (SCM запуск)
+    if not args and HAS_WIN32SERVICE:
         try:
             import servicemanager
 
@@ -171,7 +174,6 @@ def main() -> None:
         except Exception:
             pass
 
-    args = sys.argv[1:]
     if not args or args[0] in ("-h", "--help", "help"):
         print("bridge-agent — Windows Agent Management CLI")
         print("\nКоманды:")

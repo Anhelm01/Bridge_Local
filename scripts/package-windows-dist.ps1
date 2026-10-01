@@ -44,10 +44,16 @@ if (Test-Path $tomlTemplate) {
     Copy-Item (Join-Path $repoRoot "bridge.toml") -Destination (Join-Path $targetDir "bridge.toml")
 }
 
-# 4. Каталог кармана
+# 4. Документация пользователя
+$readmeSource = Join-Path $repoRoot "docs\README_WINDOWS.md"
+if (Test-Path $readmeSource) {
+    Copy-Item $readmeSource -Destination (Join-Path $targetDir "README.md")
+}
+
+# 5. Каталог кармана
 New-Item -ItemType Directory -Path (Join-Path $targetDir "pocket") -Force | Out-Null
 
-# 5. Упаковка в ZIP-архив
+# 6. Упаковка в ZIP-архив
 $zipPath = Join-Path $distDir "$DistPkgName.zip"
 if (Test-Path $zipPath) {
     Remove-Item -Path $zipPath -Force

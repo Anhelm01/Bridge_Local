@@ -1,4 +1,4 @@
-name: Build Windows Agent Executable
+name: Build and Release Distributions
 
 on:
   push:
@@ -8,11 +8,13 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
-    name: Build bridge-agent.exe (Windows x64)
+    name: Build Windows Agent (x64)
     runs-on: windows-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -44,7 +46,7 @@ jobs:
         run: |
           .\scripts\package-windows-dist.ps1
 
-      - name: Upload Artifact (ZIP Bundle)
+      - name: Upload Artifact (Windows ZIP)
         uses: actions/upload-artifact@v4
         with:
           name: BridgeLocal-Windows-x64
@@ -52,10 +54,103 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload Artifact (Standalone EXE)
+      - name: Upload Artifact (Standalone Windows EXE)
         uses: actions/upload-artifact@v4
         with:
           name: bridge-agent-standalone-exe
           path: dist/bridge-agent.exe
           if-no-files-found: error
           retention-days: 30
+
+  build-linux:
+    name: Build Linux Client (x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install build dependencies
+        run: |
+          uv sync --extra dev --extra linux
+          uv pip install pyinstaller
+
+      - name: Build bridge-cli via PyInstaller
+        run: |
+          uv run pyinstaller --clean bridge-cli.spec
+
+      - name: Smoke test bridge-cli
+        run: |
+          ./dist/bridge-cli --help
+
+      - name: Assemble Linux Distribution Package
+        run: |
+          LINUX_PKG_DIR="dist/BridgeLocal-Linux-x64"
+          rm -rf "${LINUX_PKG_DIR}" "dist/BridgeLocal-Linux-x64.zip"
+          mkdir -p "${LINUX_PKG_DIR}/pocket" "${LINUX_PKG_DIR}/systemd"
+          cp "dist/bridge-cli" "${LINUX_PKG_DIR}/"
+          cp "bridge.toml" "${LINUX_PKG_DIR}/"
+          if [ -f "docs/README_LINUX.md" ]; then
+            cp "docs/README_LINUX.md" "${LINUX_PKG_DIR}/README.md"
+          fi
+          if [ -d "scripts/systemd" ]; then
+            cp scripts/systemd/* "${LINUX_PKG_DIR}/systemd/"
+          fi
+          (cd dist && zip -r "BridgeLocal-Linux-x64.zip" "BridgeLocal-Linux-x64")
+
+      - name: Upload Artifact (Linux ZIP)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BridgeLocal-Linux-x64
+          path: dist/BridgeLocal-Linux-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Artifact (Standalone Linux Binary)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-cli-standalone-bin
+          path: dist/bridge-cli
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BridgeLocal-Windows-x64
+          path: dist-release
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BridgeLocal-Linux-x64
+          path: dist-release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-release/BridgeLocal-Windows-x64.zip
+            dist-release/BridgeLocal-Linux-x64.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
