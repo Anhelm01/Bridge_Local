@@ -11,9 +11,9 @@
 - Work strictly sequentially, phase by phase, adhering to the phases in `docs/SDLC_PLAN.md`.
 - Do not write source code until specifications, contracts, and documentation for the current phase are validated by the user.
 
-## 3. Mandatory Reporting (devblog/)
-- Upon completing any phase or sub-phase, create a comprehensive engineering report in `devblog/` (e.g. `devblog/phase_01_contracts.md`).
-- The report must document: objectives, deliverables, dev-logging added, test results, edge cases identified, and readiness checklist.
+## 3. Documentation & Clean Repository Standard
+- Maintain consolidated, high-signal documentation strictly under `docs/`.
+- Avoid redundant logs, historical devblogs, or repetitive boilerplate. All technical specifications, architectures, and user guides must be up to date and clean.
 
 ## 4. Reference Management (ref/)
 - `ref/Hum/`: Dedicated to user-supplied references, specifications, UI/CLI concepts, and notes.

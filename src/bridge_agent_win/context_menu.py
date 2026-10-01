@@ -43,7 +43,13 @@ def generate_reg_content(python_exe: str | None = None) -> str:
     exe = python_exe or (sys.executable if sys.platform == "win32" else "pythonw.exe")
     # Экранирование обратных слешей для формата .reg
     exe_escaped = exe.replace("\\", "\\\\")
-    cmd_str = f'\\"{exe_escaped}\\" -m bridge_agent_win.context_menu drop \\"%1\\"'
+    is_standalone_exe = getattr(sys, "frozen", False) or (
+        exe.lower().endswith(".exe") and "python" not in Path(exe).name.lower()
+    )
+    if is_standalone_exe:
+        cmd_str = f'\\"{exe_escaped}\\" drop \\"%1\\"'
+    else:
+        cmd_str = f'\\"{exe_escaped}\\" -m bridge_agent_win.context_menu drop \\"%1\\"'
 
     return f"""Windows Registry Editor Version 5.00
 
@@ -94,7 +100,13 @@ def install_context_menu(python_exe: str | None = None) -> bool:
         return False
 
     exe = python_exe or sys.executable
-    cmd_str = f'"{exe}" -m bridge_agent_win.context_menu drop "%1"'
+    is_standalone_exe = getattr(sys, "frozen", False) or (
+        exe.lower().endswith(".exe") and "python" not in Path(exe).name.lower()
+    )
+    if is_standalone_exe:
+        cmd_str = f'"{exe}" drop "%1"'
+    else:
+        cmd_str = f'"{exe}" -m bridge_agent_win.context_menu drop "%1"'
 
     try:
         # 1. Регистрация для файлов

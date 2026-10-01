@@ -3,7 +3,8 @@ bridge_client_linux.tui.app — Интерактивный цикл TUI прил
 
 Реализует:
   - Безопасную инициализацию alternate screen buffer (исключает повреждение терминала).
-  - Обработку функциональных клавиш F1..F6, цифр 1..6, Tab, Q, Esc, W, A.
+  - Обработку функциональных клавиш F1..F6, цифр 1..6, Tab, Q, Esc, W, A, R.
+  - Честный неблокирующий опрос доступности Windows-агента (OFFLINE / ONLINE).
   - Однопроходный режим для неинтерактивных сред / CI / тестов.
   - Чистое восстановление настроек терминала при завершении.
 """
@@ -12,7 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import select
+import socket
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,33 @@ from bridge_client_linux.tui.screens import render_current_mode
 from bridge_client_linux.tui.theme import OFFICIAL_THEME, PaletteTheme
 
 console = Console()
+
+
+def probe_target_socket(host: str, port: int, timeout_sec: float = 0.25) -> tuple[bool, float]:
+    """
+    Быстрая неблокирующая проверка доступности сокета целевого узла.
+
+    Возвращает (is_online, latency_ms). При недоступности возвращает (False, 0.0).
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setblocking(False)
+    t0 = time.perf_counter()
+    try:
+        err = s.connect_ex((host, port))
+        if err == 0:
+            latency = (time.perf_counter() - t0) * 1000.0
+            return True, round(latency, 2)
+        _, writable, _ = select.select([], [s], [], timeout_sec)
+        if writable:
+            sock_err = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if sock_err == 0:
+                latency = (time.perf_counter() - t0) * 1000.0
+                return True, round(latency, 2)
+        return False, 0.0
+    except Exception:
+        return False, 0.0
+    finally:
+        s.close()
 
 
 def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
@@ -55,6 +85,10 @@ def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
     # Демонстрация анимаций
     if k in ("a", "anim"):
         return "ANIM", True
+
+    # Обновление связи
+    if k in ("r", "refresh"):
+        return current_mode, True
 
     # Tab — циклическое переключение
     if k in ("\t",):
@@ -94,9 +128,11 @@ def dispatch_tui_action(
             out = res.stdout if res.stdout else res.stderr
             state["exec_history"].append((cmd, out or "", res.exit_code))
             state["status_msg"] = f"[bold green][OK] Команда выполнена (код {res.exit_code})[/]"
+            state["is_online"] = True
         except Exception as e:
-            state["exec_history"].append((cmd, f"Ошибка: {e}", 1))
-            state["status_msg"] = f"[bold red][ERROR][/] {e}"
+            state["is_online"] = False
+            state["exec_history"].append((cmd, f"[СБОЙ СЕТИ / ОШИБКА] {e}", 2))
+            state["status_msg"] = f"[bold red][ОШИБКА СВЯЗИ][/] {e}"
 
     elif mode == "POCKET":
         clean_path = cmd.strip("'\"")
@@ -116,6 +152,7 @@ def dispatch_tui_action(
             state["status_msg"] = (
                 f"[bold green][OK] Файл {file_path.name} ({file_size} B) отправлен в Карман![/]"
             )
+            state["is_online"] = True
             sha_preview = (res.sha256[:8] + "...") if res.sha256 else "[OK]"
             state["pocket_files"].insert(
                 0,
@@ -128,7 +165,8 @@ def dispatch_tui_action(
                 },
             )
         except Exception as e:
-            state["status_msg"] = f"[bold red][ERROR][/] {e}"
+            state["is_online"] = False
+            state["status_msg"] = f"[bold red][ОШИБКА СЕТИ][/] {e}"
 
     elif mode == "NOTES":
         try:
@@ -148,9 +186,11 @@ def dispatch_tui_action(
                     "text": cmd,
                 }
             )
+            state["is_online"] = True
             state["status_msg"] = f"[bold green][OK] Заметка отправлена[/] (id: {res.note_id[:8]})"
         except Exception as e:
-            state["status_msg"] = f"[bold red][ERROR][/] {e}"
+            state["is_online"] = False
+            state["status_msg"] = f"[bold red][ОШИБКА СЕТИ][/] {e}"
 
     elif mode == "DASH":
         if cmd.startswith("send "):
@@ -159,6 +199,20 @@ def dispatch_tui_action(
         elif cmd.startswith("exec "):
             cmd_arg = cmd[5:].strip()
             dispatch_tui_action("EXEC", cmd_arg, state, client)
+        elif cmd in ("refresh", "r"):
+            tgt_host = state.get("tgt_host", "192.168.100.2")
+            tgt_port = state.get("tgt_port", 9732)
+            is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
+            state["is_online"] = is_online
+            state["latency_ms"] = latency if is_online else None
+            if is_online:
+                state["status_msg"] = (
+                    f"[bold green][ОНЛАЙН] Узел доступен (пинг {latency:.2f} мс)[/]"
+                )
+            else:
+                state["status_msg"] = (
+                    f"[bold red][ОФФЛАЙН] Узел {tgt_host}:{tgt_port} не отвечает.[/]"
+                )
         else:
             state["status_msg"] = f"[dim]Команда: {cmd}[/]"
 
@@ -182,6 +236,35 @@ def run_interactive_tui(
     state.setdefault("notes_list", [])
     state.setdefault("input_buffer", "")
     state.setdefault("status_msg", "")
+
+    try:
+        from bridge_core.config import BridgeConfig
+
+        cfg = BridgeConfig.load()
+        tgt_host = cfg.connection.host
+        tgt_port = cfg.connection.port
+    except Exception:
+        tgt_host = "192.168.100.2"
+        tgt_port = 9732
+
+    state["tgt_host"] = tgt_host
+    state["tgt_port"] = tgt_port
+
+    # Честный опрос удаленного узла
+    if "is_online" not in state:
+        is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.25)
+        state["is_online"] = is_online
+        state["latency_ms"] = latency if is_online else None
+        if not is_online and not state.get("status_msg"):
+            state["status_msg"] = (
+                f"[bold red][ОФФЛАЙН] Windows-агент не запущен на {tgt_host}:{tgt_port}. "
+                f"Нажмите [R] для повторной проверки связи.[/]"
+            )
+        elif is_online and not state.get("status_msg"):
+            state["status_msg"] = (
+                f"[bold green][ОНЛАЙН] Узел ({tgt_host}:{tgt_port}) доступен "
+                f"(пинг {latency:.2f} мс)[/]"
+            )
 
     if single_pass or not sys.stdin.isatty():
         render_current_mode(initial_mode, theme, state)
@@ -215,6 +298,7 @@ def run_interactive_tui(
                 f"\n [dim]Навигация:[/] "
                 f"[bold {theme.blue}][F1..F6/Tab][/] Вкладки  "
                 f"[bold {theme.amber}][Enter][/] Ввод  "
+                f"[bold {theme.green}][R][/] Проверить связь  "
                 f"[bold {theme.primary}][W][/] Сплэш  "
                 f"[bold {theme.red}][Ctrl+C/Q][/] Выход"
             )
@@ -312,6 +396,18 @@ def run_interactive_tui(
                     current_mode = "DEV"
                 elif stripped in (":w", ":welcome"):
                     current_mode = "WELCOME"
+                elif stripped in (":r", ":refresh", "refresh", "r"):
+                    is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
+                    state["is_online"] = is_online
+                    state["latency_ms"] = latency if is_online else None
+                    if is_online:
+                        state["status_msg"] = (
+                            f"[bold green][ОНЛАЙН] Агент доступен (пинг {latency:.2f} мс)[/]"
+                        )
+                    else:
+                        state["status_msg"] = (
+                            f"[bold red][ОФФЛАЙН] Узел {tgt_host}:{tgt_port} не отвечает.[/]"
+                        )
                 elif stripped:
                     dispatch_tui_action(current_mode, stripped, state, client)
                 input_buffer = ""
@@ -321,8 +417,21 @@ def run_interactive_tui(
             if (
                 current_mode in ("DASH", "WELCOME", "CONFIG", "DEV")
                 and not input_buffer
-                and ch in ("1", "2", "3", "4", "5", "6", "w", "a", "q")
+                and ch in ("1", "2", "3", "4", "5", "6", "w", "a", "q", "r", "R")
             ):
+                if ch.lower() == "r":
+                    is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
+                    state["is_online"] = is_online
+                    state["latency_ms"] = latency if is_online else None
+                    if is_online:
+                        state["status_msg"] = (
+                            f"[bold green][ОНЛАЙН] Агент доступен (пинг {latency:.2f} мс)[/]"
+                        )
+                    else:
+                        state["status_msg"] = (
+                            f"[bold red][ОФФЛАЙН] Узел {tgt_host}:{tgt_port} не отвечает.[/]"
+                        )
+                    continue
                 new_mode, keep_going = handle_key_action(ch, current_mode)
                 if not keep_going:
                     break

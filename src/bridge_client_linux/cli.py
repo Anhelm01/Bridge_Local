@@ -10,7 +10,9 @@ bridge_client_linux.cli — Консольный интерфейс Bridge Local
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
 import sys
 from collections.abc import Coroutine
 from pathlib import Path
@@ -737,6 +739,20 @@ def cmd_config_show(
 
 def run() -> None:
     """Точка запуска CLI через sys.argv."""
+    # Защита от перехвата локальных LAN сокетов proxychains
+    if "proxychains" in os.environ.get("LD_PRELOAD", "") and not os.environ.get(
+        "BRIDGE_NO_PROXY_BYPASS"
+    ):
+        env = dict(os.environ)
+        preloads = [p for p in env.get("LD_PRELOAD", "").split(":") if "proxychains" not in p]
+        if preloads:
+            env["LD_PRELOAD"] = ":".join(preloads)
+        else:
+            env.pop("LD_PRELOAD", None)
+        env["BRIDGE_NO_PROXY_BYPASS"] = "1"
+        with contextlib.suppress(Exception):
+            os.execvpe(sys.executable, [sys.executable, *sys.argv], env)
+
     app()
 
 

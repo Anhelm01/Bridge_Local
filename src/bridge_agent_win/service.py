@@ -112,7 +112,7 @@ class WindowsBridgeService:
         setup_logging(self.config.logging)
 
         # Каталог для кармана и аудит-логов
-        pocket_dir = Path(self.config.pocket.path)
+        pocket_dir = self.config.get_pocket_dir()
         logs_dir = pocket_dir / self.config.pocket.logs_subdir
         self.audit_logger = AtomicJsonlLogger(
             logs_dir=logs_dir,

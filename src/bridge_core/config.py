@@ -211,12 +211,20 @@ class BridgeConfig(BaseModel):
             else:
                 candidate_paths.append(Path.home() / ".config" / "bridge-local" / "bridge.toml")
 
+            # Поддержка распакованного бандла PyInstaller (_MEIPASS)
+            if hasattr(sys, "_MEIPASS"):
+                candidate_paths.append(Path(sys._MEIPASS) / "bridge.toml")
+
             for cand in candidate_paths:
                 if cand.exists():
                     config_path = cand
                     break
 
-        config_path = config_path or DEFAULT_CONFIG_PATH
+        config_path = config_path or (
+            Path(sys.executable).parent / "bridge.toml"
+            if sys.platform == "win32"
+            else DEFAULT_CONFIG_PATH
+        )
 
         if not config_path.exists():
             logger.info(
@@ -235,6 +243,18 @@ class BridgeConfig(BaseModel):
         cls._config_path = config_path
         logger.info("Конфигурация загружена из: %s", config_path)
         return config
+
+    def get_pocket_dir(self) -> Path:
+        """
+        Возвращает абсолютный путь к каталогу кармана.
+
+        Если в bridge.toml указан относительный путь (например, './pocket'),
+        он разрешается относительно каталога самого bridge.toml.
+        """
+        p = Path(self.pocket.path).expanduser()
+        if not p.is_absolute() and self._config_path:
+            return (self._config_path.parent / p).resolve()
+        return p.resolve()
 
     def to_toml_string(self) -> str:
         """

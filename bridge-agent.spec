@@ -17,11 +17,15 @@ block_cipher = None
 spec_root = Path(__file__).resolve().parent if "__file__" in locals() else Path.cwd()
 src_dir = spec_root / "src"
 
+datas = [
+    (str(spec_root / "bridge.toml"), "."),
+] if (spec_root / "bridge.toml").exists() else []
+
 a = Analysis(
     [str(src_dir / "bridge_agent_win" / "__main__.py")],
     pathex=[str(src_dir)],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=[
         "bridge_core",
         "bridge_core.codec",

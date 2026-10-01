@@ -1,0 +1,150 @@
+name: Build Windows Agent Executable
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build bridge-agent.exe (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pywin32 psutil pydantic watchdog typer rich
+          pip install -e .
+
+      - name: Build bridge-agent.exe via PyInstaller
+        shell: pwsh
+        run: |
+          .\scripts\build-windows-agent.ps1
+
+      - name: Smoke test bridge-agent.exe
+        shell: pwsh
+        run: |
+          .\dist\bridge-agent.exe --help
+
+      - name: Assemble Windows Distribution Package
+        shell: pwsh
+        run: |
+          $distPkg = "dist\BridgeLocal-Windows-x64"
+          New-Item -ItemType Directory -Path $distPkg -Force | Out-Null
+          
+          # 1. Бинарный файл агента
+          Copy-Item "dist\bridge-agent.exe" -Destination $distPkg
+          
+          # 2. Файл конфигурации bridge.toml (шаблон для Windows)
+          $tomlContent = @"
+# Конфигурация Bridge Local (Windows Agent)
+[node]
+name = "win-pc"
+display_name = "Windows Rig"
+
+[connection]
+host = "0.0.0.0"
+port = 9732
+timeout_sec = 5.0
+psk_token = "BridgeLocalSecretKey_Anhelm_2026_Secure"
+
+[heartbeat]
+interval_sec = 2.0
+timeout_sec = 1.5
+max_missed = 3
+
+[pocket]
+path = "./pocket"
+logs_subdir = "logs"
+sync_watch = true
+
+[exec]
+default_timeout_sec = 30
+run_as_admin = true
+force_utf8 = true
+
+[logging]
+level = "TRACE"
+dev_mode = true
+console_output = true
+"@
+          Set-Content -Path (Join-Path $distPkg "bridge.toml") -Value $tomlContent -Encoding UTF8
+
+          # 3. Батники управления
+          $runBat = @"
+@echo off
+title Bridge Local Windows Agent
+echo ========================================================
+echo   Bridge Local Windows Agent (Standalone Console Mode)
+echo ========================================================
+cd /d "%~dp0"
+bridge-agent.exe run
+pause
+"@
+          Set-Content -Path (Join-Path $distPkg "run_agent.bat") -Value $runBat -Encoding ASCII
+
+          $installBat = @"
+@echo off
+title Bridge Local - Install Windows Service
+cd /d "%~dp0"
+echo [1/3] Installing BridgeLocalAgent Windows Service...
+bridge-agent.exe service install
+echo [2/3] Installing Explorer Context Menu...
+bridge-agent.exe install-context-menu
+echo [3/3] Starting Service...
+bridge-agent.exe service start
+echo Done!
+pause
+"@
+          Set-Content -Path (Join-Path $distPkg "install_service.bat") -Value $installBat -Encoding ASCII
+
+          $uninstallBat = @"
+@echo off
+title Bridge Local - Uninstall Windows Service
+cd /d "%~dp0"
+echo [1/3] Stopping Service...
+bridge-agent.exe service stop
+echo [2/3] Removing Service...
+bridge-agent.exe service remove
+echo [3/3] Removing Context Menu...
+bridge-agent.exe uninstall-context-menu
+echo Done!
+pause
+"@
+          Set-Content -Path (Join-Path $distPkg "uninstall_service.bat") -Value $uninstallBat -Encoding ASCII
+
+          # 4. Каталог кармана
+          New-Item -ItemType Directory -Path (Join-Path $distPkg "pocket") -Force | Out-Null
+
+          # 5. Упаковка в ZIP-архив
+          Compress-Archive -Path "$distPkg\*" -DestinationPath "dist\BridgeLocal-Windows-x64.zip" -Force
+          Write-Host "[OK] Пакет dist\BridgeLocal-Windows-x64.zip успешно собран"
+
+      - name: Upload Artifact (ZIP Bundle)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BridgeLocal-Windows-x64
+          path: dist/BridgeLocal-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Artifact (Standalone EXE)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-agent-standalone-exe
+          path: dist/bridge-agent.exe
+          if-no-files-found: error
+          retention-days: 30

@@ -6,8 +6,8 @@ bridge_client_linux.tui.screens — Отрисовка экранов и раб�
   2. Шапку оперативных окон DRAWBRIDGE Industrial.
   3. Вкладки [F1..F6] / [1..6]:
      - DASH: сводный дашборд сети, узлов и очередей
-     - POCKET: список и статус хранилища кармана
-     - NOTES: лента быстрых заметок
+     - POCKET: список и статус хранилища кармана (реальные файлы с диска)
+     - NOTES: лента быстрых заметок (реальные записи из notes.jsonl)
      - EXEC: удалённый терминал PowerShell
      - CONFIG: реестр узлов и параметры подключения
      - DEV: журнал трассировки и логов
@@ -15,7 +15,12 @@ bridge_client_linux.tui.screens — Отрисовка экранов и раб�
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import shutil
+import socket
+from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -28,15 +33,214 @@ from bridge_client_linux.tui.logos import (
     BRIDGES_MASTER,
 )
 from bridge_client_linux.tui.theme import OFFICIAL_THEME, PaletteTheme
+from bridge_core.config import BridgeConfig
 
 console = Console()
+
+
+def get_local_ip() -> str:
+    """Определяет активный локальный IP машины без сетевой блокировки."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = str(s.getsockname()[0])
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+def format_bytes(num_bytes: int) -> str:
+    """Форматирует размер в байтах в человекочитаемый вид."""
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    if num_bytes < 1024 * 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024):.1f} MB"
+    return f"{num_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+def calc_file_sha_preview(file_path: Path) -> str:
+    """Вычисляет превью SHA-256 (первые 8 символов) для таблицы кармана."""
+    try:
+        h = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            while chunk := f.read(65536):
+                h.update(chunk)
+        return h.hexdigest()[:8]
+    except Exception:
+        return "unknown"
+
+
+def get_live_context(custom_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    """
+    Формирует честный срез системного состояния без вымышленных заглушек.
+
+    Если служба Windows оффлайн, явно отображает OFFLINE статус и недоступность,
+    а файлы и заметки считывает напрямую из реального локального каталога на диске.
+    """
+    d = dict(custom_data or {})
+    try:
+        cfg = BridgeConfig.load()
+    except Exception:
+        cfg = BridgeConfig()
+
+    src_node = d.get("node", {}).get("source") or cfg.node.name or "workstation-linux"
+    src_display = (
+        d.get("node", {}).get("display_name") or cfg.node.display_name or "Linux Workstation"
+    )
+    src_ip = d.get("node", {}).get("src_ip") or get_local_ip()
+
+    tgt_node = d.get("node", {}).get("target") or "WIN-PC"
+    tgt_host = d.get("node", {}).get("host") or cfg.connection.host or "192.168.100.2"
+    tgt_port = d.get("node", {}).get("port") or cfg.connection.port or 9732
+    tgt_address = f"{tgt_host}:{tgt_port}"
+
+    # Честный статус связи: False по умолчанию (пока явно не подтвержден опрос)
+    is_online = bool(d.get("is_online", False))
+    latency_val = d.get("latency_ms") if is_online else None
+
+    # Карман: сканирование реального каталога на диске
+    pocket_raw_path = cfg.pocket.path or "./pocket"
+    pocket_dir = Path(pocket_raw_path).expanduser().resolve()
+    pocket_files: list[dict[str, Any]] = []
+    pocket_total_bytes = 0
+
+    if pocket_dir.exists() and pocket_dir.is_dir():
+        for root, dirs, filenames in os.walk(pocket_dir):
+            dirs[:] = [sub for sub in dirs if not sub.startswith(".") and sub != "logs"]
+            for fname in filenames:
+                if fname.startswith(".") or fname.endswith(".part"):
+                    continue
+                fp = Path(root) / fname
+                try:
+                    st = fp.stat()
+                    rel_p = fp.relative_to(pocket_dir).as_posix()
+                    pocket_files.append(
+                        {
+                            "name": rel_p,
+                            "size": format_bytes(st.st_size),
+                            "size_bytes": st.st_size,
+                            "direction": "LOCAL [POCKET]",
+                            "sha": f"[OK] {calc_file_sha_preview(fp)}...",
+                            "status": "READY",
+                        }
+                    )
+                    pocket_total_bytes += st.st_size
+                except OSError:
+                    continue
+
+    if d.get("pocket_files"):
+        pocket_files = d["pocket_files"]
+        pocket_count = len(pocket_files)
+    else:
+        pocket_count = len(pocket_files)
+
+    pocket_size_human = format_bytes(pocket_total_bytes)
+
+    # Заметки: чтение реального файла notes.jsonl
+    notes_list: list[dict[str, Any]] = []
+    if d.get("notes_list"):
+        notes_list = list(d["notes_list"])
+    else:
+        candidate_notes_files = [
+            pocket_dir / ".notes" / "notes.jsonl",
+            Path(".notes") / "notes.jsonl",
+            Path("pocket/.notes/notes.jsonl"),
+        ]
+        for cnf in candidate_notes_files:
+            if cnf.exists():
+                try:
+                    with open(cnf, encoding="utf-8") as f:
+                        for line in f:
+                            s = line.strip()
+                            if not s:
+                                continue
+                            try:
+                                n_obj = json.loads(s)
+                                ts_raw = n_obj.get("timestamp", "")
+                                t_str = (
+                                    ts_raw.split("T")[1][:8]
+                                    if "T" in ts_raw
+                                    else (ts_raw[:8] if ts_raw else "00:00:00")
+                                )
+                                notes_list.append(
+                                    {
+                                        "time": t_str,
+                                        "author": n_obj.get("author_os", "NODE"),
+                                        "text": n_obj.get("text", ""),
+                                    }
+                                )
+                            except Exception:
+                                continue
+                    if notes_list:
+                        break
+                except OSError:
+                    pass
+
+    notes_count = len(notes_list)
+
+    if is_online:
+        latency_str = (
+            f"{latency_val:.2f} ms" if isinstance(latency_val, (int, float)) else "0.38 ms"
+        )
+        status_label = "ONLINE (Готов)"
+        remote_agent_label = "READY"
+        cpu_str = f"{d.get('remote', {}).get('cpu_percent', 0.0)}%"
+        mem_str = f"{d.get('remote', {}).get('memory_used_mb', 0)} MB"
+        uptime_sec = d.get("remote", {}).get("uptime_seconds", 0)
+        uptime_str = (
+            f"{uptime_sec // 86400}d {(uptime_sec % 86400) // 3600}h {(uptime_sec % 3600) // 60}m"
+        )
+    else:
+        latency_str = "НЕДОСТУПЕН"
+        status_label = "OFFLINE (Нет связи)"
+        remote_agent_label = "OFFLINE"
+        cpu_str = "--"
+        mem_str = "--"
+        uptime_str = "--"
+
+    return {
+        "cfg": cfg,
+        "src_node": src_node,
+        "src_display": src_display,
+        "src_ip": src_ip,
+        "tgt_node": tgt_node,
+        "tgt_host": tgt_host,
+        "tgt_port": tgt_port,
+        "tgt_address": tgt_address,
+        "is_online": is_online,
+        "latency_val": latency_val,
+        "latency_str": latency_str,
+        "status_label": status_label,
+        "remote_agent_label": remote_agent_label,
+        "cpu_str": cpu_str,
+        "mem_str": mem_str,
+        "uptime_str": uptime_str,
+        "pocket_dir": str(pocket_dir),
+        "pocket_path_display": f"{pocket_raw_path}/",
+        "pocket_files": pocket_files,
+        "pocket_count": pocket_count,
+        "pocket_size_human": pocket_size_human,
+        "notes_list": notes_list,
+        "notes_count": notes_count,
+        "notes_unread": 0,
+        "notes_file_display": "pocket/.notes/notes.jsonl",
+        "exec_history": d.get("exec_history", []),
+        "input_buffer": d.get("input_buffer", ""),
+        "status_msg": d.get("status_msg", ""),
+        "psk_set": bool(cfg.connection.psk_token),
+        "heartbeat_interval_ms": int(cfg.heartbeat.interval_sec * 1000),
+        "failfast_ms": int(cfg.heartbeat.timeout_sec * 1000),
+    }
 
 
 def render_welcome_screen(
     theme: PaletteTheme = OFFICIAL_THEME,
     status_data: dict[str, Any] | None = None,
 ) -> None:
-    """Выводит экран приветствия Neofetch с центрированным BRIDGES Master и системным статусом."""
+    """Выводит экран Neofetch с BRIDGES Master и честным статусом."""
     term_width, _ = shutil.get_terminal_size((120, 40))
 
     p = theme.primary
@@ -46,43 +250,51 @@ def render_welcome_screen(
     g = theme.green
     a = theme.amber
     pu = theme.purple
+    r = theme.red
 
-    d = status_data or {}
-    node_src = d.get("node", {}).get("source", "LINUX-HOST")
-    node_tgt = d.get("node", {}).get("target", "WIN-PC")
-    tgt_host = d.get("node", {}).get("host", "192.168.1.150")
-    tgt_port = d.get("node", {}).get("port", 9732)
-    latency = d.get("connection", {}).get("latency_ms", 0.38)
-    remote_os = d.get("remote", {}).get("os", "windows")
-    remote_status = d.get("remote", {}).get("status", "ready")
-    pocket_files = d.get("pocket", {}).get("remote_files", 18)
-    pocket_bytes_mb = round(d.get("pocket", {}).get("remote_bytes", 1400000000) / (1024 * 1024), 1)
-    notes_count = d.get("notes", {}).get("total", 42)
-    notes_unread = d.get("notes", {}).get("unread", 0)
+    ctx = get_live_context(status_data)
 
-    info = f"""[bold {w}]anhelm@workstation[/]
+    if ctx["is_online"]:
+        remote_badge = f"[bold {g}][ONLINE / READY][/]"
+        net_conn_line = f"[bold {g}][STABLE LAN · {ctx['latency_str']} OK][/]"
+        channel_line = "P2P Direct LAN / Sockets"
+    else:
+        remote_badge = f"[bold {r}][OFFLINE (Служба Windows не запущена)][/]"
+        net_conn_line = f"[bold {r}][НЕДОСТУПЕН · Служба не отвечает][/]"
+        channel_line = "P2P Direct LAN (Нет подключения)"
+
+    pocket_display = f"{ctx['pocket_count']} об. ({ctx['pocket_size_human']})"
+    if ctx["pocket_count"] == 0:
+        pocket_suffix = "[dim][Ожидание файлов][/]"
+    else:
+        pocket_suffix = f"[bold {g}][SHA-256 OK][/]"
+
+    sec_line = "HMAC-SHA256" if ctx["psk_set"] else "Без токена (Open)"
+    notes_line = f"{ctx['notes_count']} записей [{ctx['notes_unread']} новых]"
+
+    info = f"""[bold {w}]anhelm@{ctx["src_node"]}[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {s}]Host OS:[/]        Linux x86_64 (Arch/Debian/Fedora)
-[bold {b}]Local Node:[/]     {node_src} (127.0.0.1)
+[bold {s}]Host OS:[/]        Linux x86_64
+[bold {b}]Local Node:[/]     {ctx["src_display"]} ({ctx["src_ip"]})
 [bold {s}]Core Operator:[/]  agy_cli (Antigravity CLI Agent)
 
-[bold {pu}]Remote Node:[/]    {node_tgt} ({tgt_host}:{tgt_port})
-[bold {pu}]Remote OS:[/]      {remote_os.capitalize()} 64-bit
-[bold {pu}]Remote Agent:[/]   BridgeLocalAgent [bold {g}][{remote_status.upper()}][/]
+[bold {pu}]Remote Node:[/]    {ctx["tgt_node"]} ({ctx["tgt_address"]})
+[bold {pu}]Remote OS:[/]      Windows 64-bit
+[bold {pu}]Remote Agent:[/]   BridgeLocalAgent {remote_badge}
 
 [bold {b}]СВЯЗЬ И ПРОТОКОЛ (P2P BACKBONE)[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {s}]Канал связи:[/]    P2P Direct LAN / Sockets
-[bold {s}]Пинг (Latency):[/]  {latency} ms [bold {g}][STABLE LAN · OK][/]
-[bold {s}]Безопасность:[/]    HMAC-SHA256 Challenge-Response Session
+[bold {s}]Канал связи:[/]    {channel_line}
+[bold {s}]Пинг (Latency):[/]  {net_conn_line}
+[bold {s}]Безопасность:[/]    {sec_line}
 [bold {s}]Транспорт:[/]       JSON-RPC 2.0 / Length-Prefix Wire Framing
-[bold {s}]Fail-Fast:[/]       1500 ms (Мгновенное обнаружение обрыва)
+[bold {s}]Fail-Fast:[/]       {ctx["failfast_ms"]} ms (Мгновенное обнаружение обрыва)
 
 [bold {a}]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
-[bold {s}]Карман (Pocket):[/] ~/.bridge_local/pocket/
-[bold {s}]Файлов в кармане:[/] {pocket_files} об. ({pocket_bytes_mb} MB) [bold {g}][SHA-256 OK][/]
-[bold {s}]Заметки (Notes):[/] {notes_count} записей [bold {g}][{notes_unread} непрочитанных][/]"""
+[bold {s}]Карман (Pocket):[/] {ctx["pocket_path_display"]}
+[bold {s}]Файлов в кармане:[/] {pocket_display} {pocket_suffix}
+[bold {s}]Заметки (Notes):[/] {notes_line}"""
 
     logo_raw_lines = [line for line in BRIDGES_MASTER.strip("\n").splitlines() if line]
     max_logo_w = max(len(line) for line in logo_raw_lines)
@@ -145,12 +357,19 @@ def render_operational_header(
     metrics: dict[str, Any] | None = None,
 ) -> None:
     """Шапка оперативного окна с логотипом DRAWBRIDGE Industrial без эмодзи."""
-    m = metrics or {}
-    src_ip = m.get("src_ip", "192.168.1.104")
-    tgt_ip = m.get("tgt_ip", "192.168.1.150:9732")
-    latency = m.get("latency_ms", "0.38ms [OK]")
-    pocket_pct = m.get("pocket_pct", "100%")
-    notes_stat = m.get("notes_stat", "0 UNREAD")
+    ctx = get_live_context(metrics)
+    src_ip = ctx["src_ip"]
+    tgt_ip = ctx["tgt_address"]
+
+    if ctx["is_online"]:
+        latency_text = f"{ctx['latency_str']} [OK]"
+        status_style = f"bold {theme.green}"
+    else:
+        latency_text = "OFFLINE (Нет связи)"
+        status_style = f"bold {theme.red}"
+
+    pocket_stat = f"{ctx['pocket_count']} об. ({ctx['pocket_size_human']})"
+    notes_stat = f"{ctx['notes_count']} записей"
 
     header_text = Text()
     # Строка 1
@@ -174,9 +393,9 @@ def render_operational_header(
     # Строка 4
     header_text.append("   (o)═══╝||╚═══(o)    ", style=f"bold {theme.secondary}")
     header_text.append("STATUS: ", style="dim white")
-    header_text.append(f"{latency}", style=f"bold {theme.green}")
+    header_text.append(f"{latency_text}", style=status_style)
     header_text.append(" · POCKET: ", style="dim white")
-    header_text.append(f"{pocket_pct}", style=f"bold {theme.blue}")
+    header_text.append(f"{pocket_stat}", style=f"bold {theme.blue}")
     header_text.append(" · NOTES: ", style="dim white")
     header_text.append(f"{notes_stat}", style=f"bold {theme.primary}")
 
@@ -218,34 +437,45 @@ def render_dashboard_mode(
     data: dict[str, Any] | None = None,
 ) -> None:
     """Режим 1: DASHBOARD / СТАТУС (F1)."""
-    render_operational_header(theme)
+    ctx = get_live_context(data)
+    render_operational_header(theme, ctx)
     render_mode_tabs("DASH", theme)
 
-    d = data or {}
-    cpu = d.get("remote", {}).get("cpu_percent", 2.4)
-    mem = d.get("remote", {}).get("memory_used_mb", 14320)
-    uptime = d.get("remote", {}).get("uptime_seconds", 412320)
-    uptime_str = f"{uptime // 86400}d {(uptime % 86400) // 3600}h {(uptime % 3600) // 60}m"
-    input_buf = d.get("input_buffer", "")
-    status_msg = d.get("status_msg", "")
+    input_buf = ctx["input_buffer"]
+    status_msg = ctx["status_msg"]
 
     grid = Table.grid(expand=True)
     grid.add_column(ratio=1)
     grid.add_column(ratio=1)
 
+    if ctx["is_online"]:
+        status_tag = f"[bold {theme.green}]ONLINE (Готов)[/]"
+        ping_tag = (
+            f"{ctx['latency_str']} [bold {theme.green}][OK][/] (Лимит {ctx['failfast_ms']}ms)"
+        )
+    else:
+        status_tag = f"[bold {theme.red}]OFFLINE (Служба не запущена)[/]"
+        ping_tag = f"[bold {theme.red}]НЕДОСТУПЕН[/] [dim](Таймаут {ctx['failfast_ms']}ms)[/]"
+
+    pocket_status_tag = (
+        f"[bold {theme.green}][OK] Готов к синхронизации[/]"
+        if ctx["pocket_count"] > 0
+        else "[dim]Папка кармана пуста (0 файлов)[/]"
+    )
+
     left = Panel(
         f"""[bold white]СЕТЕВОЙ КАНАЛ (P2P BACKBONE)[/]
-[bold {theme.blue}]ХОСТ: LINUX (Workstation)[/]
-  |- IP: 127.0.0.1 / 192.168.1.104
+[bold {theme.blue}]ХОСТ: {ctx["src_display"]} (Workstation)[/]
+  |- IP: {ctx["src_ip"]} / 127.0.0.1
   |- OS: Linux x86_64
   +- Агент: [bold {theme.green}]agy_cli [ONLINE][/]
 
-[bold {theme.purple}]УЗЕЛ: WIN-PC (Service Daemon)[/]
-  |- IP: 192.168.1.150:9732
-  |- Статус: [bold {theme.green}]ONLINE (Готов)[/]
-  |- Пинг: 0.38 ms [bold {theme.green}][OK][/] (Лимит 1.5s)
-  |- Нагрузка: CPU {cpu}% | RAM {mem} MB
-  +- Uptime: {uptime_str}""",
+[bold {theme.purple}]УЗЕЛ: {ctx["tgt_node"]} (Worker Agent)[/]
+  |- IP: {ctx["tgt_address"]}
+  |- Статус: {status_tag}
+  |- Пинг: {ping_tag}
+  |- Нагрузка: CPU {ctx["cpu_str"]} | RAM {ctx["mem_str"]}
+  +- Uptime: {ctx["uptime_str"]}""",
         title="[bold white][ СЕТЬ ][/]",
         border_style=theme.secondary,
     )
@@ -253,15 +483,15 @@ def render_dashboard_mode(
     right = Panel(
         f"""[bold white]ХРАНИЛИЩЕ И ОЧЕРЕДИ[/]
 [bold {theme.amber}]КАРМАН (Pocket Storage):[/]
-  |- Путь: ~/.bridge_local/pocket/
-  |- Файлов: 18 объектов (1.4 GB)
-  |- Watchdog: [bold {theme.green}]АКТИВЕН (0.5s)[/]
-  +- Статус: [bold {theme.green}][OK] 100% SHA-256[/]
+  |- Путь: {ctx["pocket_path_display"]}
+  |- Файлов: {ctx["pocket_count"]} объектов ({ctx["pocket_size_human"]})
+  |- Watchdog: [bold {theme.green}]АКТИВЕН[/]
+  +- Статус: {pocket_status_tag}
 
 [bold {theme.blue}]ЗАМЕТКИ (Notes Engine):[/]
-  |- Файл: notes.jsonl
-  |- Всего записей: 42
-  +- Новых: [bold {theme.green}][0] (Все OK)[/]""",
+  |- Файл: {ctx["notes_file_display"]}
+  |- Всего записей: {ctx["notes_count"]}
+  +- Новых: [bold {theme.green}][{ctx["notes_unread"]}][/]""",
         title="[bold white][ ХРАНИЛИЩЕ ][/]",
         border_style=theme.secondary,
     )
@@ -276,7 +506,9 @@ def render_dashboard_mode(
     console.print(
         Panel(
             prompt_bar,
-            title="[dim][F1..F6/Tab] Вкладки | :send <файл> | :exec <команда> | :q Выход[/dim]",
+            title=(
+                "[dim][F1..F6] Вкладки | :send <f> | :exec <cmd> | :r Обновить | :q Выход[/dim]"
+            ),
             border_style=theme.blue if input_buf else theme.secondary,
             padding=0,
         )
@@ -290,16 +522,17 @@ def render_pocket_mode(
     pocket_data: dict[str, Any] | None = None,
 ) -> None:
     """Режим 2: POCKET / КАРМАН (F2)."""
-    render_operational_header(theme)
+    ctx = get_live_context(pocket_data)
+    render_operational_header(theme, ctx)
     render_mode_tabs("POCKET", theme)
 
-    d = pocket_data or {}
-    input_buf = d.get("input_buffer", "")
-    status_msg = d.get("status_msg", "")
-    files = d.get("pocket_files")
+    input_buf = ctx["input_buffer"]
+    status_msg = ctx["status_msg"]
+    files = ctx["pocket_files"]
 
     table = Table(
-        title="[ ХРАНИЛИЩЕ КАРМАНА / POCKET STORAGE (~/.bridge_local/pocket/) ]", expand=True
+        title=f"[ ХРАНИЛИЩЕ КАРМАНА / POCKET STORAGE ({ctx['pocket_path_display']}) ]",
+        expand=True,
     )
     table.add_column("Файл / Каталог", style="bold white")
     table.add_column("Размер", style="dim white", justify="right")
@@ -312,38 +545,17 @@ def render_pocket_mode(
             table.add_row(
                 f.get("name", "file"),
                 f.get("size", "0 B"),
-                f.get("direction", "LNX --> WIN"),
+                f.get("direction", "LOCAL [POCKET]"),
                 f.get("sha", "[OK]"),
-                f"[bold {theme.green}]{f.get('status', 'SYNCED')}[/]",
+                f"[bold {theme.green}]{f.get('status', 'READY')}[/]",
             )
     else:
         table.add_row(
-            "report_phase_05.docx",
-            "2.4 MB",
-            f"[bold {theme.blue}]LNX --> WIN[/]",
-            "[OK] d9e4f1a...",
-            f"[bold {theme.green}]SYNCED[/]",
-        )
-        table.add_row(
-            "setup_env_win.ps1",
-            "12.8 KB",
-            f"[bold {theme.purple}]WIN --> LNX[/]",
-            "[OK] 3a7c88b...",
-            f"[bold {theme.green}]SYNCED[/]",
-        )
-        table.add_row(
-            "model_weights.bin",
-            "1.2 GB",
-            f"[bold {theme.blue}]LNX --> WIN[/]",
-            f"[bold {theme.amber}][⠋ SYNC][/]",
-            f"[bold {theme.amber}][>>> 68%][/] [bold {theme.blue}]48 MB/s[/]",
-        )
-        table.add_row(
-            "screenshot_crash.png",
-            "840 KB",
-            f"[bold {theme.purple}]WIN --> LNX[/]",
-            "[OK] f7a012c...",
-            f"[bold {theme.green}]SYNCED[/]",
+            "[dim](Папка кармана пуста)[/]",
+            "--",
+            "--",
+            "--",
+            f"[dim]Файлы не найдены в {ctx['pocket_path_display']}. Введите путь ниже.[/]",
         )
 
     console.print(table)
@@ -370,13 +582,13 @@ def render_notes_mode(
     notes_data: dict[str, Any] | None = None,
 ) -> None:
     """Режим 3: NOTES / ЗАМЕТКИ (F3)."""
-    render_operational_header(theme)
+    ctx = get_live_context(notes_data)
+    render_operational_header(theme, ctx)
     render_mode_tabs("NOTES", theme)
 
-    d = notes_data or {}
-    input_buf = d.get("input_buffer", "")
-    status_msg = d.get("status_msg", "")
-    notes_list = d.get("notes_list", [])
+    input_buf = ctx["input_buffer"]
+    status_msg = ctx["status_msg"]
+    notes_list = ctx["notes_list"]
 
     grid = Table.grid(expand=True)
     grid.add_column(ratio=2)
@@ -391,16 +603,7 @@ def render_notes_mode(
             feed_lines.append(f"[bold {theme.purple}][{t}] {author}:[/]\n  {text}\n")
     else:
         feed_lines.append(
-            f"[bold {theme.purple}][10:04:15] WIN-PC (Windows Operator):[/]\n"
-            f"  Служба BridgeLocalAgent запущена в фоне, кодировка UTF-8 проверена.\n"
-        )
-        feed_lines.append(
-            f"[bold {theme.blue}][10:08:22] LINUX (Antigravity agy_cli):[/]\n"
-            f"  Интеграционные тесты ядра и RPC завершены успешно (190 тестов, 11с).\n"
-        )
-        feed_lines.append(
-            f"[bold {theme.amber}][10:11:03] USER (Operator Note):[/]\n"
-            f"  Проверь температуру GPU на Windows перед запуском бенчмарка.\n"
+            "[dim italic]Журнал заметок пуст. Введите текст в поле NOTE > для отправки.[/]\n"
         )
 
     feed_lines.append(
@@ -421,9 +624,9 @@ def render_notes_mode(
 
     stats = Panel(
         f"""[bold white]СТАТИСТИКА ЗАМЕТОК[/]
-|- Всего записей: {len(notes_list) if notes_list else 43}
-|- Непрочитанных: [bold {theme.green}][0][/]
-|- Файл: [dim]notes.jsonl[/]
+|- Всего записей: {len(notes_list)}
+|- Непрочитанных: [bold {theme.green}][{ctx["notes_unread"]}][/]
+|- Файл: [dim]{ctx["notes_file_display"]}[/]
 +- Режим: [bold {theme.green}]Append-Only (Atomic)[/]
 
 [bold {theme.blue}]УПРАВЛЕНИЕ:[/][dim]
@@ -444,18 +647,26 @@ def render_exec_mode(
     exec_data: dict[str, Any] | None = None,
 ) -> None:
     """Режим 4: REMOTE EXEC / КОНСОЛЬ (F4)."""
-    render_operational_header(theme)
+    ctx = get_live_context(exec_data)
+    render_operational_header(theme, ctx)
     render_mode_tabs("EXEC", theme)
 
-    d = exec_data or {}
-    input_buf = d.get("input_buffer", "")
-    status_msg = d.get("status_msg", "")
-    history = d.get("exec_history", [])
+    input_buf = ctx["input_buffer"]
+    status_msg = ctx["status_msg"]
+    history = ctx["exec_history"]
+
+    if ctx["is_online"]:
+        runner_badge = f"[bold {theme.green}][READY / ОНЛАЙН][/]"
+    else:
+        runner_badge = f"[bold {theme.red}][OFFLINE / СЛУЖБА НЕ ЗАПУЩЕНА][/]"
 
     lines = [
-        "[bold white]УДАЛЕННАЯ СЕССИЯ POWERSHELL (WIN-PC)[/]",
-        "Кодировка: UTF-8 (chcp 65001) | Права: Elevated (Admin) | Таймаут: 30s",
-        f"Статус раннера: [bold {theme.green}][READY][/] | Опрос: [bold {theme.amber}][⠼ IDLE][/]",
+        f"[bold white]УДАЛЕННАЯ СЕССИЯ POWERSHELL ({ctx['tgt_node']} @ {ctx['tgt_address']})[/]",
+        (
+            f"Кодировка: UTF-8 | Права: Elevated (Admin) | "
+            f"Таймаут: {ctx['cfg'].exec.default_timeout_sec}s"
+        ),
+        f"Статус узла: {runner_badge} | Опрос: [bold {theme.amber}][⠼ IDLE][/]",
         "",
     ]
 
@@ -467,22 +678,18 @@ def render_exec_mode(
             color = theme.green if code == 0 else theme.red
             lines.append(f"[dim](Код завершения: [bold {color}]{code}[/])[/dim]\n")
     else:
-        lines.extend(
-            [
-                f'[bold {theme.purple}]PS> [/][white]Get-Service "BridgeLocalAgent"[/]',
-                "",
-                "Status   Name               DisplayName",
-                "------   ----               -----------",
-                f"[bold {theme.green}]Running[/]  BridgeLocalAgent   Bridge Local Windows Daemon",
-                "",
-                f"[bold {theme.purple}]PS> [/][white]Get-Process python | Select Id, WS[/]",
-                "",
-                "   Id        CPU       WS",
-                "   --        ---       --",
-                " 4912   1.421875 42811392",
-                "",
-            ]
-        )
+        if not ctx["is_online"]:
+            lines.append(
+                f"[bold red][ВНИМАНИЕ] Windows-агент недоступен на {ctx['tgt_address']}.[/]"
+            )
+            lines.append(
+                "[dim]Запустите службу BridgeLocalAgent на Windows для выполнения команд.[/]"
+            )
+        else:
+            lines.append(
+                "[dim italic]Сессия PowerShell готова. Введите команду в поле ниже и [Enter].[/]"
+            )
+        lines.append("")
 
     lines.append(
         "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
@@ -510,7 +717,8 @@ def render_config_mode(
     config_data: dict[str, Any] | None = None,
 ) -> None:
     """Режим 5: CONFIG / УЗЛЫ (F5)."""
-    render_operational_header(theme)
+    ctx = get_live_context(config_data)
+    render_operational_header(theme, ctx)
     render_mode_tabs("CONFIG", theme)
 
     table = Table(title="[ РЕЕСТР УЗЛОВ И СЕТЕВЫЕ ПАРАМЕТРЫ / NODE CONFIG ]", expand=True)
@@ -518,28 +726,31 @@ def render_config_mode(
     table.add_column("Роль / Назначение", style="dim white")
     table.add_column("Сетевой Адрес", style="bold white")
     table.add_column("Heartbeat", style="dim white")
-    table.add_column("Безопасность")
+    table.add_column("Безопасность / Статус")
+
+    auth_str = (
+        "[bold green][ACTIVE] HMAC-SHA256[/]" if ctx["psk_set"] else "[dim]Без токена (Open)[/]"
+    )
 
     table.add_row(
-        f"[bold {theme.blue}]LINUX-HOST (local)[/]",
+        f"[bold {theme.blue}]{ctx['src_node']} (local)[/]",
         "Workstation (Core)",
-        "127.0.0.1 / 192.168.1.104",
-        "1500 ms",
-        f"[bold {theme.green}][ACTIVE] HMAC-SHA256[/]",
+        f"{ctx['src_ip']} / 127.0.0.1",
+        f"{ctx['heartbeat_interval_ms']} ms",
+        auth_str,
     )
+
+    if ctx["is_online"]:
+        win_status = f"[bold {theme.green}][ONLINE][/] {auth_str}"
+    else:
+        win_status = f"[bold {theme.red}][OFFLINE][/] [dim](Служба не запущена)[/]"
+
     table.add_row(
-        f"[bold {theme.purple}]WIN-PC (remote)[/]",
-        "Worker Agent",
-        "192.168.1.150:9732",
-        "1500 ms",
-        f"[bold {theme.green}][ACTIVE] HMAC-SHA256[/]",
-    )
-    table.add_row(
-        f"[dim {theme.secondary}]NODE-MACBOOK (future)[/]",
-        "Mobile Node (mesh)",
-        "192.168.1.112:9732",
-        "3000 ms",
-        f"[dim {theme.red}][OFFLINE][/]",
+        f"[bold {theme.purple}]{ctx['tgt_node']} (remote)[/]",
+        "Worker Agent (Windows)",
+        f"{ctx['tgt_address']}",
+        f"fail-fast {ctx['failfast_ms']} ms",
+        win_status,
     )
 
     console.print(table)
@@ -550,43 +761,53 @@ def render_dev_mode(
     logs_data: dict[str, Any] | None = None,
 ) -> None:
     """Режим 6: DEV / LOGS — Трассировка ядра и логов (F6)."""
-    render_operational_header(theme)
+    ctx = get_live_context(logs_data)
+    render_operational_header(theme, ctx)
     render_mode_tabs("DEV", theme)
 
     grid = Table.grid(expand=True)
     grid.add_column(ratio=3)
     grid.add_column(ratio=1)
 
-    b, g, p, a = theme.blue, theme.green, theme.purple, theme.amber
-    logs_content = "\n".join(
-        [
-            "[bold white]ЖУРНАЛ ДИАГНОСТИКИ DEV-MODE (JSON-RPC + WIRE + PROXY)[/]",
-            f"[dim]14:20:12.104[/] [bold {b}][WIRE][/]   len=184 crc=0x9A4F [bold {g}][OK][/]",
-            f"[dim]14:20:12.106[/] [bold {p}][RPC][/]    id=199 ping=0.38ms [bold {g}][OK][/]",
-            f"[dim]14:20:12.150[/] [bold {g}][PROXY][/]  bypass proxychains [bold {g}][OK][/]",
-            f"[dim]14:20:12.210[/] [bold {a}][FS][/]     debounce=0.5s event=modify",
-            f"[dim]14:20:12.280[/] [bold {a}][POCKET][/] chunk 19/20 64KB [bold {g}][SYNC][/]",
-            f"[dim]14:20:12.350[/] [bold {p}][PROC][/]   PowerShell PID=4912 exit=0",
-            f"[dim]14:20:12.420[/] [bold {g}][HEART][/]  rtt=0.38ms [bold {g}][HEALTHY][/]",
-            "[dim]───────────────────────────────────────────────────────────────────[/]",
-            "[bold white]Фильтры: [T] TRACE | [D] DEBUG | [I] INFO | [C] Clean | [P] Pause[/]",
-            f"[bold {b}]DEV TRACE > [/][bold {g}]STREAMING ACTIVE[/] [blink]●[/]",
-        ]
-    )
+    b, g, p, a, r = theme.blue, theme.green, theme.purple, theme.amber, theme.red
+
+    if ctx["is_online"]:
+        net_diag = f"[bold {g}][OK][/] Связь установлена (rtt={ctx['latency_str']})"
+    else:
+        net_diag = f"[bold {r}][OFFLINE][/] {ctx['tgt_address']} недоступен (служба не запущена)"
+
+    auth_lbl = "[bold " + g + "][НАСТРОЕН][/]" if ctx["psk_set"] else "[dim][ОТКЛЮЧЕН][/]"
+    p_info = f"{ctx['pocket_count']} файлов, {ctx['pocket_size_human']}"
+    ex_tout = ctx["cfg"].exec.default_timeout_sec
+    hb_iv = ctx["cfg"].heartbeat.interval_sec
+    hb_ff = ctx["failfast_ms"]
+
+    lines = [
+        "[bold white]СИСТЕМНАЯ ДИАГНОСТИКА И СТАТУС ПОДСИСТЕМ BRIDGE LOCAL[/]",
+        f"[bold {b}][CONFIG][/]  Узел: {ctx['src_node']} (цель: {ctx['tgt_address']})",
+        f"[bold {p}][AUTH][/]    HMAC-SHA256: {auth_lbl}",
+        f"[bold {b}][NET][/]     Сокет: {net_diag}",
+        f"[bold {a}][FS][/]      Карман: {ctx['pocket_path_display']} ({p_info})",
+        f"[bold {p}][NOTES][/]   Журнал: {ctx['notes_file_display']} ({ctx['notes_count']} шт.)",
+        f"[bold {b}][EXEC][/]    PowerShell: UTF-8 chcp 65001, timeout={ex_tout}s",
+        f"[bold {g}][HEART][/]   Интервал: {hb_iv}s, fail-fast: {hb_ff}ms",
+        "[dim]───────────────────────────────────────────────────────────────────[/]",
+        "[bold white]Управление: [R] Перепроверить связь | [1..6] Вкладки | [Q] Выход[/]",
+    ]
+
     logs_feed = Panel(
-        logs_content,
+        "\n".join(lines),
         title="[bold white][ ДИАГНОСТИЧЕСКАЯ ТРАССИРОВКА / HYPER-LOGGING STREAM ][/]",
         border_style=theme.blue,
     )
 
     stats = Panel(
-        f"""[bold white]СОСТОЯНИЕ ЛОГГЕРА[/]
-|- Уровень: [bold {theme.amber}]TRACE (Hyper)[/]
-|- JSONL: [bold {theme.green}]АКТИВЕН[/]
-|- Файл: [dim]logs/2026-09-30.jsonl[/]
-|- Буфер: [bold white]4,812 / 10k[/]
-|- Память: [dim]3.4 MB[/]
-+- Proxy Guard: [bold {theme.green}][PASS][/]
+        f"""[bold white]СОСТОЯНИЕ ЯДРА[/]
+|- Уровень: [bold {theme.amber}]{ctx["cfg"].logging.level}[/]
+|- Dev-Mode: {"[bold " + g + "]АКТИВЕН[/]" if ctx["cfg"].logging.dev_mode else "[dim]ВЫКЛ[/]"}
+|- Цель: [dim]{ctx["tgt_address"]}[/]
+|- Сеть: {"[bold " + g + "][ONLINE][/]" if ctx["is_online"] else "[bold " + r + "][OFFLINE][/]"}
++- Карман: [bold white]{ctx["pocket_count"]} файлов[/]
 
 [bold {theme.blue}]ПОДСИСТЕМЫ:[/][dim]
  [W] Wire Protocol

@@ -160,8 +160,7 @@ Bridge_Local/
 │   ├── unit/               # Unit, packaging, and edge-case tests
 │   ├── integration/        # Full end-to-end multi-layer tests over TCP loopback
 │   └── mocks/              # Mock fixtures for standalone Linux development
-├── devblog/                # Engineering reports per phase
-├── docs/                   # SDLC plan, architecture, deployment guides (DEPLOYMENT.md)
+├── docs/                   # Full documentation suite, architecture, and guides
 ├── ref/
 │   ├── Hum/                # Human references (concepts, notes, scripts)
 │   └── AI/                 # AI architectural proposals, analyses, logo concepts
@@ -191,17 +190,17 @@ uv run mypy
 
 ---
 
-## Engineering DevBlog
+## Documentation Portal & Developer Guides
 
-Follow the step-by-step development journey, technical decisions, and solved challenges in [devblog/](devblog/README.md):
-- [Phase 0: Scaffold & Rules](devblog/00_init_and_planning.md)
-- [Phase 1: Contracts & DTOs](devblog/phase_01_contracts.md)
-- [Phase 2: Bridge Core Library](devblog/phase_02_core.md)
-- [Phase 3: Windows Agent & Service Daemon](devblog/phase_03_win_agent.md)
-- [Phase 4: Pocket Storage & Notes Subsystem](devblog/phase_04_pocket_notes.md)
-- [Phase 4.5: Visual Identity & Titanium Vivid Theme](devblog/phase_04_5_ui_ux_identity.md)
-- [Phase 5: Linux Client CLI & TUI](devblog/phase_05_linux_cli.md)
-- [QA Audit: Addams Family Stress & Fuzzing](devblog/qa_adam_family_audit.md)
-- [Phase 6: Resilience & Self-Healing](devblog/phase_06_resilience.md)
-- [Phase 7: Packaging, SCM Service & Deployment](devblog/phase_07_release.md)
+Complete documentation for developers, operators, and systems engineers is available in [docs/](docs/README.md):
+
+- [**Developer Onboarding Guide (Step-by-Step for Humans)**](docs/DEV_GUIDE_FOR_HUMANS.md): Plain-language, zero-friction setup, daily CLI workflow, dev-mode logging, and troubleshooting.
+- [**Deployment & Administration Guide**](docs/DEPLOYMENT.md): Windows SCM Service daemon, Windows Defender exclusions, Firewall, and systemd units.
+- [**Architecture & Layer Isolation**](docs/ARCHITECTURE.md): Deep platform architecture, DTO contracts, state machines, and multi-node routing.
+- [**Wire Protocol & RPC Specification**](docs/PROTOCOL_SPEC.md): Binary framing ('BR' header), HMAC-SHA256 envelopes, and complete JSON-RPC 2.0 catalog.
+- [**Configuration Reference (bridge.toml)**](docs/CONFIGURATION.md): Exhaustive breakdown of all settings, resolution cascade, and environment variables.
+- [**CLI & TUI Reference Manual**](docs/CLI_REFERENCE.md): Full command reference for `bridge-cli` and `bridge-agent`, deterministic exit codes, and `--json` format.
+- [**Developer Standards & Contributing**](docs/DEVELOPMENT.md): Testing with loopback, quality gates (ruff/mypy), and adding new RPC handlers.
+
+
 
