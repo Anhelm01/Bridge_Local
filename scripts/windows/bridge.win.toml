@@ -1,0 +1,30 @@
+# Конфигурация Bridge Local (Windows Agent)
+[node]
+name = "win-pc"
+display_name = "Windows Rig"
+
+[connection]
+host = "0.0.0.0"
+port = 9732
+timeout_sec = 5.0
+psk_token = "BridgeLocalSecretKey_Anhelm_2026_Secure"
+
+[heartbeat]
+interval_sec = 2.0
+timeout_sec = 1.5
+max_missed = 3
+
+[pocket]
+path = "./pocket"
+logs_subdir = "logs"
+sync_watch = true
+
+[exec]
+default_timeout_sec = 30
+run_as_admin = true
+force_utf8 = true
+
+[logging]
+level = "TRACE"
+dev_mode = true
+console_output = true

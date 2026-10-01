@@ -525,19 +525,28 @@ class BridgeLocalAgentWindowsService(_BaseServiceFramework):  # type: ignore[mis
     _exe_args_ = "service-run"
 
     def __init__(self, args: list[str]) -> None:
-        super().__init__(args)
         if HAS_WIN32SERVICE:
-            self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+            with contextlib.suppress(Exception):
+                # Вне окружения SCM (например, в юнит-тестах pytest) RegisterServiceCtrlHandler
+                # возвращает ошибку 1063 (ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
+                super().__init__(args)
+            try:
+                self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+            except Exception:
+                self.hWaitStop = None
         else:
+            super().__init__(args)
             self.hWaitStop = None
         self._service: WindowsBridgeService | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def SvcStop(self) -> None:  # noqa: N802
         if HAS_WIN32SERVICE:
-            self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+            with contextlib.suppress(Exception):
+                self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
             if self.hWaitStop is not None:
-                win32event.SetEvent(self.hWaitStop)
+                with contextlib.suppress(Exception):
+                    win32event.SetEvent(self.hWaitStop)
         if self._service is not None and self._loop is not None:
             self._loop.call_soon_threadsafe(self._service._stop_event.set)
 
