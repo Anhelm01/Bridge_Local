@@ -1,7 +1,8 @@
 @echo off
+@chcp 65001 >nul 2>&1
 title Bridge Local - Install Context Menu
 echo ========================================================
-echo   Установка пункта «Отправить в Карман» в Проводник
+echo   Bridge Local - Register "Send to Pocket" Context Menu
 echo ========================================================
 set "REPO_ROOT=%~dp0"
 if not exist "%REPO_ROOT%\bridge.toml" (
@@ -10,10 +11,10 @@ if not exist "%REPO_ROOT%\bridge.toml" (
 cd /d "%REPO_ROOT%"
 set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
 
-if exist "%REPO_ROOT%\bridge-agent.exe" (
-    "%REPO_ROOT%\bridge-agent.exe" install-context-menu
-) else if exist "%REPO_ROOT%\dist\bridge-agent.exe" (
+if exist "%REPO_ROOT%\dist\bridge-agent.exe" (
     "%REPO_ROOT%\dist\bridge-agent.exe" install-context-menu
+) else if exist "%REPO_ROOT%\bridge-agent.exe" (
+    "%REPO_ROOT%\bridge-agent.exe" install-context-menu
 ) else if exist "%REPO_ROOT%\.venv\Scripts\python.exe" (
     "%REPO_ROOT%\.venv\Scripts\python.exe" -m bridge_agent_win.cli install-context-menu
 ) else (

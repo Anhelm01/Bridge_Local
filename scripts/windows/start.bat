@@ -1,10 +1,15 @@
 @echo off
+@chcp 65001 >nul 2>&1
 setlocal EnableDelayedExpansion
-title Bridge Local — Единый мастер запуска и управления Windows
-cd /d "%~dp0"
-set "PYTHONPATH=%~dp0src;%PYTHONPATH%"
+title Bridge Local - Windows Control Center
+set "REPO_ROOT=%~dp0"
+if not exist "%REPO_ROOT%\bridge.toml" (
+    if exist "%~dp0..\..\bridge.toml" set "REPO_ROOT=%~dp0..\.."
+)
+cd /d "%REPO_ROOT%"
+set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
 
-:: Определение прав Администратора
+:: Check Administrator Privileges
 net session >nul 2>&1
 set "IS_ADMIN=0"
 if %ERRORLEVEL% EQU 0 set "IS_ADMIN=1"
@@ -12,34 +17,33 @@ if %ERRORLEVEL% EQU 0 set "IS_ADMIN=1"
 :menu
 cls
 echo ==============================================================================
-echo              BRIDGE LOCAL — ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ (WINDOWS)
+echo                   BRIDGE LOCAL - WINDOWS CONTROL CENTER
 echo ==============================================================================
-echo  Статус прав: !IS_ADMIN!
 if "!IS_ADMIN!"=="1" (
-    echo  Режим: [АДМИНИСТРАТОР] — полный доступ к службам и брандмауэру
+    echo  Privilege Level: [ADMINISTRATOR] - Full access to SCM and Firewall
 ) else (
-    echo  Режим: [ПОЛЬЗОВАТЕЛЬ] — для настройки брандмауэра и службы потребуется UAC
+    echo  Privilege Level: [STANDARD USER] - UAC prompt will be requested if needed
 )
 echo ==============================================================================
 echo.
-echo   [1] БЫСТРЫЙ СТАРТ ПОД КЛЮЧ (Рекомендуется)
-echo       --^> Открывает порт 9732 в Брандмауэре (все профили)
-echo       --^> Регистрирует пункт «Отправить в Карман» в Проводнике Windows
-echo       --^> Запускает агент Bridge Local в интерактивной консоли
+echo   [1] QUICK START (Recommended)
+echo       --^> Open port 9732 in Windows Firewall (All profiles)
+echo       --^> Register "Send to Pocket" in Windows Explorer context menu
+echo       --^> Launch Bridge Local Agent in interactive console
 echo.
-echo   [2] УСТАНОВКА ПОСТОЯННОЙ ФОНОВОЙ СЛУЖБЫ WINDOWS (SCM)
-echo       --^> Полная автонастройка + служба работает в фоне без открытых окон
+echo   [2] INSTALL AS BACKGROUND WINDOWS SERVICE (SCM)
+echo       --^> Full auto-setup + agent runs silently in background on boot
 echo.
-echo   [3] Только запустить агент в консоли (без изменения настроек)
-echo   [4] Открыть порт 9732 в Брандмауэре Windows (Firewall Rule)
-echo   [5] Установить / Обновить меню «Отправить в Карман» в Проводнике
-echo   [6] Пересобрать автономный исполняемый файл (bridge-agent.exe)
-echo   [7] Удалить службу Windows и пункт из Проводника (Очистка)
+echo   [3] Run Agent in Console only (without changing system settings)
+echo   [4] Open Firewall Port 9732 TCP (Standalone Firewall Rule)
+echo   [5] Install / Update Explorer Context Menu ("Send to Pocket")
+echo   [6] Rebuild Executable (dist\bridge-agent.exe via PyInstaller)
+echo   [7] Uninstall Windows Service and Context Menu (Full Cleanup)
 echo.
-echo   [0] Выход
+echo   [0] Exit
 echo.
 echo ==============================================================================
-set /p "CHOICE=Выберите действие [по умолчанию: 1]: "
+set /p "CHOICE=Select an option [default: 1]: "
 if "%CHOICE%"=="" set "CHOICE=1"
 
 if "%CHOICE%"=="1" goto :action_quick_start
@@ -51,48 +55,48 @@ if "%CHOICE%"=="6" goto :action_build
 if "%CHOICE%"=="7" goto :action_uninstall
 if "%CHOICE%"=="0" exit /b 0
 
-echo [WARN] Неверный ввод, повторите попытку.
+echo [WARN] Invalid input, please try again.
 timeout /t 2 >nul
 goto :menu
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 1: Быстрый старт под ключ
+:: ACTION 1: Quick Start
 :: ============================================================================
 :action_quick_start
 echo.
 echo ==============================================================================
-echo   ШАГ 1/3: Настройка Брандмауэра Windows (порт 9732 TCP)...
+echo   STEP 1/3: Configuring Windows Firewall (Port 9732 TCP)...
 echo ==============================================================================
 if "!IS_ADMIN!"=="1" (
     call :sub_apply_firewall
 ) else (
-    echo [INFO] Запрос прав администратора для открытия порта 9732...
+    echo [INFO] Requesting Administrator privileges to open port 9732...
     powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall delete rule name=\"Bridge Local Daemon (TCP-In)\" >nul 2>&1 & netsh advfirewall firewall add rule name=\"Bridge Local Daemon (TCP-In)\" dir=in action=allow protocol=TCP localport=9732 profile=any & powershell -NoProfile -Command \"Set-NetConnectionProfile -InterfaceAlias ''Ethernet'' -NetworkCategory Private -ErrorAction SilentlyContinue\"' -Verb RunAs -Wait" 2>nul
-    echo [OK] Брандмауэр настроен.
+    echo [OK] Firewall rule applied.
 )
 
 echo.
 echo ==============================================================================
-echo   ШАГ 2/3: Регистрация контекстного меню «Отправить в Карман»...
+echo   STEP 2/3: Registering Explorer Context Menu ("Send to Pocket")...
 echo ==============================================================================
 call :sub_apply_context_menu
 
 echo.
 echo ==============================================================================
-echo   ШАГ 3/3: Запуск агента Bridge Local...
+echo   STEP 3/3: Launching Bridge Local Agent...
 echo ==============================================================================
 goto :sub_start_agent_console
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 2: Установка постоянной службы Windows SCM
+:: ACTION 2: Install Windows Service
 :: ============================================================================
 :action_install_service
 if "!IS_ADMIN!"=="0" (
-    echo [INFO] Для установки системной службы требуются права Администратора.
-    echo Запускаем установщик с запросом UAC...
-    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%~dp0install_service.bat\"\"' -Verb RunAs"
+    echo [INFO] Administrator rights required to install Windows Service.
+    echo Launching installer with UAC prompt...
+    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%REPO_ROOT%\install_service.bat\"\"' -Verb RunAs"
     exit /b 0
 )
 call :sub_apply_firewall
@@ -100,26 +104,26 @@ call :sub_apply_context_menu
 call :sub_exec_agent service install
 call :sub_exec_agent service start
 echo.
-echo [OK] Системная служба BridgeLocalAgent успешно зарегистрирована и запущена в фоне!
+echo [OK] Service BridgeLocalAgent successfully installed and started in background!
 pause
 goto :menu
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 3: Запуск агента в консоли
+:: ACTION 3: Run Agent in Console
 :: ============================================================================
 :action_run_agent
 goto :sub_start_agent_console
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 4: Только Брандмауэр
+:: ACTION 4: Firewall Only
 :: ============================================================================
 :action_firewall
 if "!IS_ADMIN!"=="1" (
     call :sub_apply_firewall
 ) else (
-    echo [INFO] Запрос прав администратора...
+    echo [INFO] Requesting Administrator rights...
     powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall delete rule name=\"Bridge Local Daemon (TCP-In)\" >nul 2>&1 & netsh advfirewall firewall add rule name=\"Bridge Local Daemon (TCP-In)\" dir=in action=allow protocol=TCP localport=9732 profile=any & pause' -Verb RunAs -Wait"
 )
 pause
@@ -127,7 +131,7 @@ goto :menu
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 5: Контекстное меню
+:: ACTION 5: Context Menu
 :: ============================================================================
 :action_context_menu
 call :sub_apply_context_menu
@@ -136,55 +140,55 @@ goto :menu
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 6: Пересборка EXE
+:: ACTION 6: Rebuild EXE
 :: ============================================================================
 :action_build
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build-windows-agent.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\build-windows-agent.ps1"
 pause
 goto :menu
 
 
 :: ============================================================================
-:: ДЕЙСТВИЕ 7: Удаление службы и очистка
+:: ACTION 7: Uninstall and Clean Up
 :: ============================================================================
 :action_uninstall
 if "!IS_ADMIN!"=="0" (
-    echo [INFO] Запрос прав администратора для удаления службы...
-    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%~dp0uninstall_service.bat\"\"' -Verb RunAs"
+    echo [INFO] Requesting Administrator rights to uninstall service...
+    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%REPO_ROOT%\uninstall_service.bat\"\"' -Verb RunAs"
     exit /b 0
 )
 call :sub_exec_agent service stop
 call :sub_exec_agent service remove
 call :sub_exec_agent uninstall-context-menu
 echo.
-echo [OK] Служба и контекстное меню успешно удалены.
+echo [OK] Service and Context Menu successfully removed.
 pause
 goto :menu
 
 
 :: ============================================================================
-:: Вспомогательные подпрограммы
+:: Subroutines
 :: ============================================================================
 
 :sub_apply_firewall
 netsh advfirewall firewall delete rule name="Bridge Local Daemon (TCP-In)" >nul 2>&1
 netsh advfirewall firewall add rule name="Bridge Local Daemon (TCP-In)" dir=in action=allow protocol=TCP localport=9732 profile=any >nul
 powershell -NoProfile -Command "Set-NetConnectionProfile -InterfaceAlias 'Ethernet' -NetworkCategory Private -ErrorAction SilentlyContinue" >nul 2>&1
-echo [OK] Правило Брандмауэра для TCP порта 9732 создано (все профили).
+echo [OK] Firewall rule for TCP port 9732 created (all profiles).
 goto :eof
 
 :sub_apply_context_menu
 call :sub_exec_agent install-context-menu
-echo [OK] Пункт меню Проводника «Отправить в Карман (Bridge Local)» зарегистрирован.
+echo [OK] Context menu "Send to Pocket (Bridge Local)" registered in Explorer.
 goto :eof
 
 :sub_exec_agent
-if exist "%~dp0dist\bridge-agent.exe" (
-    "%~dp0dist\bridge-agent.exe" %*
-) else if exist "%~dp0bridge-agent.exe" (
-    "%~dp0bridge-agent.exe" %*
-) else if exist "%~dp0.venv\Scripts\python.exe" (
-    "%~dp0.venv\Scripts\python.exe" -m bridge_agent_win.cli %*
+if exist "%REPO_ROOT%\dist\bridge-agent.exe" (
+    "%REPO_ROOT%\dist\bridge-agent.exe" %*
+) else if exist "%REPO_ROOT%\bridge-agent.exe" (
+    "%REPO_ROOT%\bridge-agent.exe" %*
+) else if exist "%REPO_ROOT%\.venv\Scripts\python.exe" (
+    "%REPO_ROOT%\.venv\Scripts\python.exe" -m bridge_agent_win.cli %*
 ) else (
     python -m bridge_agent_win.cli %*
 )
@@ -192,8 +196,8 @@ goto :eof
 
 :sub_start_agent_console
 echo.
-echo [INFO] Запуск демона Bridge Local...
-echo [INFO] Для остановки нажмите Ctrl+C.
+echo [INFO] Starting Bridge Local Agent daemon...
+echo [INFO] Press Ctrl+C to stop.
 echo.
 call :sub_exec_agent run
 pause

@@ -1,14 +1,16 @@
 @echo off
+@chcp 65001 >nul 2>&1
 setlocal
 set "REPO_ROOT=%~dp0"
 if not exist "%REPO_ROOT%\bridge.toml" (
-    set "REPO_ROOT=%~dp0..\.."
+    if exist "%~dp0..\..\bridge.toml" set "REPO_ROOT=%~dp0..\.."
 )
 cd /d "%REPO_ROOT%"
 set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
 
 if "%~1"=="" (
-    echo [ERROR] Укажите путь к файлу для отправки в Карман.
+    echo [ERROR] Please specify a file or directory to send to Pocket.
+    echo Usage: drop_to_pocket.bat ^<path_to_file^>
     pause
     exit /b 1
 )
