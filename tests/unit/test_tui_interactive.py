@@ -215,16 +215,12 @@ def test_render_all_screens_with_scroll_indicators() -> None:
     theme = OFFICIAL_THEME
     state = {
         "pocket_files": [
-            {"name": f"test_file_{i}.txt", "size": "1.2 MB", "status": "READY"}
-            for i in range(25)
+            {"name": f"test_file_{i}.txt", "size": "1.2 MB", "status": "READY"} for i in range(25)
         ],
         "notes_list": [
-            {"time": "14:30:00", "author": "NODE_A", "text": f"Заметка #{i}"}
-            for i in range(15)
+            {"time": "14:30:00", "author": "NODE_A", "text": f"Заметка #{i}"} for i in range(15)
         ],
-        "exec_history": [
-            (f"Get-Process -Id {i}", f"Process info {i}", 0) for i in range(10)
-        ],
+        "exec_history": [(f"Get-Process -Id {i}", f"Process info {i}", 0) for i in range(10)],
         "dev_logs": [f"[TRACE] Network packet {i}" for i in range(16)],
         "scroll_offsets": {"POCKET": 5, "NOTES": 3, "EXEC": 2, "DEV": 4},
         "is_online": True,

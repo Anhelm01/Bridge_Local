@@ -21,10 +21,19 @@ datas = [
     (str(spec_root / "bridge.toml"), "."),
 ] if (spec_root / "bridge.toml").exists() else []
 
+binaries = []
+if sys.platform == "win32":
+    try:
+        from PyInstaller.utils.hooks import collect_dynamic_libs
+
+        binaries.extend(collect_dynamic_libs("win32"))
+    except Exception:
+        pass
+
 a = Analysis(
     [str(src_dir / "bridge_agent_win" / "__main__.py")],
     pathex=[str(src_dir)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=[
         "bridge_core",

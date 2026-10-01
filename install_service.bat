@@ -4,17 +4,14 @@ echo ========================================================
 echo   Установка системной службы Bridge Local (SCM)
 echo   Требуются права Администратора!
 echo ========================================================
-set "REPO_ROOT=%~dp0"
-if not exist "%REPO_ROOT%\bridge.toml" (
-    if exist "%~dp0..\..\bridge.toml" set "REPO_ROOT=%~dp0..\.."
-)
-cd /d "%REPO_ROOT%"
-set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
+cd /d "%~dp0"
+set "PYTHONPATH=%~dp0src;%PYTHONPATH%"
 
+:: Проверка прав администратора
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [ERROR] Требуются права Администратора!
+    echo [ERROR] Скрипт должен быть запущен от имени Администратора!
     echo Кликните правой кнопкой мыши по install_service.bat и выберите:
     echo "Запуск от имени администратора"
     echo.
@@ -22,23 +19,23 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-if exist "%REPO_ROOT%\bridge-agent.exe" (
+if exist "%~dp0dist\bridge-agent.exe" (
     echo [1/3] Регистрация службы Windows SCM...
-    "%REPO_ROOT%\bridge-agent.exe" service install
+    "%~dp0dist\bridge-agent.exe" service install
     echo [2/3] Установка контекстного меню Проводника...
-    "%REPO_ROOT%\bridge-agent.exe" install-context-menu
+    "%~dp0dist\bridge-agent.exe" install-context-menu
     echo [3/3] Запуск службы...
-    "%REPO_ROOT%\bridge-agent.exe" service start
-) else if exist "%REPO_ROOT%\dist\bridge-agent.exe" (
+    "%~dp0dist\bridge-agent.exe" service start
+) else if exist "%~dp0bridge-agent.exe" (
     echo [1/3] Регистрация службы Windows SCM...
-    "%REPO_ROOT%\dist\bridge-agent.exe" service install
+    "%~dp0bridge-agent.exe" service install
     echo [2/3] Установка контекстного меню Проводника...
-    "%REPO_ROOT%\dist\bridge-agent.exe" install-context-menu
+    "%~dp0bridge-agent.exe" install-context-menu
     echo [3/3] Запуск службы...
-    "%REPO_ROOT%\dist\bridge-agent.exe" service start
+    "%~dp0bridge-agent.exe" service start
 ) else (
     set "PY_CMD=python"
-    if exist "%REPO_ROOT%\.venv\Scripts\python.exe" set "PY_CMD=%REPO_ROOT%\.venv\Scripts\python.exe"
+    if exist "%~dp0.venv\Scripts\python.exe" set "PY_CMD=%~dp0.venv\Scripts\python.exe"
     echo [1/3] Регистрация службы Windows SCM...
     %PY_CMD% -m bridge_agent_win.cli service install
     echo [2/3] Установка контекстного меню Проводника...

@@ -4,12 +4,8 @@ echo ========================================================
 echo   Остановка и удаление системной службы Bridge Local
 echo   Требуются права Администратора!
 echo ========================================================
-set "REPO_ROOT=%~dp0"
-if not exist "%REPO_ROOT%\bridge.toml" (
-    if exist "%~dp0..\..\bridge.toml" set "REPO_ROOT=%~dp0..\.."
-)
-cd /d "%REPO_ROOT%"
-set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
+cd /d "%~dp0"
+set "PYTHONPATH=%~dp0src;%PYTHONPATH%"
 
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
@@ -22,23 +18,23 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-if exist "%REPO_ROOT%\bridge-agent.exe" (
+if exist "%~dp0dist\bridge-agent.exe" (
     echo [1/3] Остановка службы...
-    "%REPO_ROOT%\bridge-agent.exe" service stop
+    "%~dp0dist\bridge-agent.exe" service stop
     echo [2/3] Удаление службы...
-    "%REPO_ROOT%\bridge-agent.exe" service remove
+    "%~dp0dist\bridge-agent.exe" service remove
     echo [3/3] Удаление контекстного меню...
-    "%REPO_ROOT%\bridge-agent.exe" uninstall-context-menu
-) else if exist "%REPO_ROOT%\dist\bridge-agent.exe" (
+    "%~dp0dist\bridge-agent.exe" uninstall-context-menu
+) else if exist "%~dp0bridge-agent.exe" (
     echo [1/3] Остановка службы...
-    "%REPO_ROOT%\dist\bridge-agent.exe" service stop
+    "%~dp0bridge-agent.exe" service stop
     echo [2/3] Удаление службы...
-    "%REPO_ROOT%\dist\bridge-agent.exe" service remove
+    "%~dp0bridge-agent.exe" service remove
     echo [3/3] Удаление контекстного меню...
-    "%REPO_ROOT%\dist\bridge-agent.exe" uninstall-context-menu
+    "%~dp0bridge-agent.exe" uninstall-context-menu
 ) else (
     set "PY_CMD=python"
-    if exist "%REPO_ROOT%\.venv\Scripts\python.exe" set "PY_CMD=%REPO_ROOT%\.venv\Scripts\python.exe"
+    if exist "%~dp0.venv\Scripts\python.exe" set "PY_CMD=%~dp0.venv\Scripts\python.exe"
     echo [1/3] Остановка службы...
     %PY_CMD% -m bridge_agent_win.cli service stop
     echo [2/3] Удаление службы...

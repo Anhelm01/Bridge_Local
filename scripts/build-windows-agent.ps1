@@ -47,7 +47,14 @@ if ($Clean) {
     if (Test-Path (Join-Path $distDir "bridge-agent.exe")) {
         Remove-Item -Path (Join-Path $distDir "bridge-agent.exe") -Force -ErrorAction SilentlyContinue
     }
-}
+# Проверка и инициализация системных компонентов pywin32
+try {
+    $postinstallCmd = Get-Command "pywin32_postinstall.py" -ErrorAction SilentlyContinue
+    if ($postinstallCmd) {
+        Write-Host "[BUILD] Регистрация системных компонентов pywin32..."
+        python $postinstallCmd.Source -install -silent 2>$null
+    }
+} catch {}
 
 # Проверка наличия pyinstaller
 $pyinstallerCmd = Get-Command "pyinstaller" -ErrorAction SilentlyContinue

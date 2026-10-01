@@ -18,7 +18,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from bridge_core.config import BridgeConfig
+# Автоматическое добавление каталога src/ в sys.path
+_src_dir = str(Path(__file__).resolve().parent.parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+from bridge_core.config import BridgeConfig  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,54 @@ SHELL_KEY_FILES = r"Software\Classes\*\shell\BridgeLocalSend"
 SHELL_KEY_DIRS = r"Software\Classes\Directory\shell\BridgeLocalSend"
 MENU_LABEL = "Отправить в Карман (Bridge Local)"
 DEFAULT_ICON = "shell32.dll,46"
+
+
+def find_bridge_config(explicit_path: Path | str | None = None) -> Path | None:
+    """Ищет конфигурационный файл bridge.toml в стандартных локациях."""
+    if explicit_path:
+        p = Path(explicit_path).resolve()
+        if p.exists():
+            return p
+
+    env_cfg = os.environ.get("BRIDGE_CONFIG")
+    if env_cfg and Path(env_cfg).exists():
+        return Path(env_cfg)
+
+    # 1. Рядом с репозиторием (src/bridge_agent_win/../../bridge.toml)
+    repo_cfg = Path(__file__).resolve().parent.parent.parent / "bridge.toml"
+    if repo_cfg.exists():
+        return repo_cfg
+
+    # 2. Рядом с исполняемым файлом
+    exe_cfg = Path(sys.executable).parent / "bridge.toml"
+    if exe_cfg.exists():
+        return exe_cfg
+
+    # 3. В C:\BridgeLocal\bridge.toml
+    if sys.platform == "win32":
+        std_cfg = Path(r"C:\BridgeLocal\bridge.toml")
+        if std_cfg.exists():
+            return std_cfg
+
+    # 4. В текущей директории
+    cwd_cfg = Path.cwd() / "bridge.toml"
+    if cwd_cfg.exists():
+        return cwd_cfg
+
+    return None
+
+
+def show_windows_alert(title: str, message: str, is_error: bool = False) -> None:
+    """Показывает нативное системное всплывающее окно Windows."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        flags = (0x10 if is_error else 0x40) | 0x10000 | 0x40000
+        ctypes.windll.user32.MessageBoxW(0, message, title, flags)
+    except Exception:
+        pass
 
 
 def generate_reg_content(python_exe: str | None = None) -> str:
@@ -88,7 +141,10 @@ def save_reg_file(output_path: Path | str, python_exe: str | None = None) -> Pat
     return out
 
 
-def install_context_menu(python_exe: str | None = None) -> bool:
+def install_context_menu(
+    python_exe: str | None = None,
+    drop_script_path: Path | None = None,
+) -> bool:
     """
     Устанавливает пункт контекстного меню в реестр Windows текущего пользователя (HKCU).
 
@@ -106,7 +162,22 @@ def install_context_menu(python_exe: str | None = None) -> bool:
     if is_standalone_exe:
         cmd_str = f'"{exe}" drop "%1"'
     else:
-        cmd_str = f'"{exe}" -m bridge_agent_win.context_menu drop "%1"'
+        # Проверяем наличие вспомогательного батника drop_to_pocket.bat
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        drop_bat = drop_script_path
+        if drop_bat is None:
+            for cand in [
+                repo_root / "drop_to_pocket.bat",
+                repo_root / "scripts" / "windows" / "drop_to_pocket.bat",
+            ]:
+                if cand.exists():
+                    drop_bat = cand
+                    break
+
+        if drop_bat is not None and drop_bat.exists():
+            cmd_str = f'"{drop_bat.resolve()}" "%1"'
+        else:
+            cmd_str = f'"{exe}" -m bridge_agent_win.context_menu drop "%1"'
 
     try:
         # 1. Регистрация для файлов
@@ -137,7 +208,7 @@ def uninstall_context_menu() -> bool:
     Удаляет пункт контекстного меню из реестра Windows (HKCU).
     """
     if winreg is None:
-        logger.warning("Удаление контекстного меню через winreg доступно только на Windows.")
+        logger.warning("Удаление контекстного меню через winreg доступна только на Windows.")
         return False
 
     def _delete_key_recursive(root: Any, subkey: str) -> None:
@@ -166,34 +237,70 @@ def uninstall_context_menu() -> bool:
 def drop_file_to_pocket(
     file_path: str | Path,
     config_path: Path | None = None,
+    show_alert: bool = False,
 ) -> Path:
     """
     Копирует файл или каталог в локальный Карман для последующей синхронизации.
 
-    Когда файл попадает в Карман, служба Windows (Watchdog) автоматически
-    обнаруживает его и синхронизирует с удалённым узлом (Linux).
+    Когда файл попадает в Карман, служба Windows (Watchdog) и клиент Linux
+    синхронизируют его по локальной сети.
     """
     src = Path(file_path).resolve()
     if not src.exists():
-        raise FileNotFoundError(f"Файл или каталог не найден: {src}")
+        msg = f"Файл или каталог не найден: {src}"
+        if show_alert:
+            show_windows_alert("Bridge Local - Ошибка", msg, is_error=True)
+        raise FileNotFoundError(msg)
 
-    cfg = BridgeConfig.load(config_path)
-    pocket_dir = Path(cfg.pocket.path).expanduser().resolve()
-    pocket_dir.mkdir(parents=True, exist_ok=True)
+    cfg_file = find_bridge_config(config_path)
+    cfg = BridgeConfig.load(cfg_file)
 
-    dest = pocket_dir / src.name
-    if src.is_dir():
-        if dest.exists():
-            shutil.rmtree(dest)
-        shutil.copytree(src, dest)
+    raw_pocket = Path(cfg.pocket.path).expanduser()
+    if raw_pocket.is_absolute():
+        pocket_dir = raw_pocket.resolve()
     else:
-        # Для файлов: атомарное копирование через временный файл
-        part = pocket_dir / f".{src.name}.part"
-        shutil.copy2(src, part)
-        os.replace(part, dest)
+        # Привязываем относительный путь к каталогу найденного bridge.toml
+        base_dir = (
+            cfg_file.parent
+            if cfg_file
+            else (
+                Path(__file__).resolve().parent.parent.parent
+                if (Path(__file__).resolve().parent.parent.parent / "bridge.toml").exists()
+                else Path.cwd()
+            )
+        )
+        pocket_dir = (base_dir / raw_pocket).resolve()
 
-    logger.info("[POCKET-DROP] Объект '%s' успешно скопирован в карман: %s", src.name, dest)
-    return dest
+    pocket_dir.mkdir(parents=True, exist_ok=True)
+    dest = pocket_dir / src.name
+
+    try:
+        if src.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(src, dest)
+        else:
+            # Для файлов: атомарное копирование через временный файл
+            part = pocket_dir / f".{src.name}.part"
+            shutil.copy2(src, part)
+            os.replace(part, dest)
+
+        logger.info("[POCKET-DROP] Объект '%s' успешно скопирован в карман: %s", src.name, dest)
+        if show_alert:
+            show_windows_alert(
+                "Bridge Local - Карман",
+                f"Файл '{src.name}' успешно скопирован в Карман!\n\nКаталог: {dest}",
+            )
+        return dest
+    except Exception as e:
+        logger.error("[POCKET-DROP-ERROR] Ошибка копирования '%s': %s", src.name, e)
+        if show_alert:
+            show_windows_alert(
+                "Bridge Local - Ошибка",
+                f"Ошибка копирования в Карман:\n{e}",
+                is_error=True,
+            )
+        raise
 
 
 def main() -> None:
@@ -234,8 +341,13 @@ def main() -> None:
             print("[ERROR] Не указан путь к файлу для отправки.")
             sys.exit(1)
         target = args[1]
+        show_alert = sys.platform == "win32" and not sys.stdin.isatty()
+        if "--alert" in args:
+            show_alert = True
+        if "--quiet" in args or "--no-alert" in args:
+            show_alert = False
         try:
-            dest = drop_file_to_pocket(target)
+            dest = drop_file_to_pocket(target, show_alert=show_alert)
             print(f"[OK] Файл отправлен в Карман: {dest}")
         except Exception as e:
             print(f"[ERROR] Сбой отправки в Карман: {e}")

@@ -15,6 +15,11 @@ import contextlib
 import sys
 from pathlib import Path
 
+# Автоматическое добавление каталога src/ в sys.path
+_src_dir = str(Path(__file__).resolve().parent.parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
 # Принудительная настройка UTF-8 вывода для Windows-консоли
 if sys.platform == "win32":
     with contextlib.suppress(Exception):
@@ -24,18 +29,33 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
-from bridge_agent_win.context_menu import (
+from bridge_agent_win.context_menu import (  # noqa: E402
     drop_file_to_pocket,
     install_context_menu,
     save_reg_file,
     uninstall_context_menu,
 )
-from bridge_agent_win.service import (
-    HAS_WIN32SERVICE,
-    handle_service_command,
-    main_standalone,
-    run_scm_service,
-)
+
+try:
+    from bridge_agent_win.service import (
+        HAS_WIN32SERVICE,
+        handle_service_command,
+        main_standalone,
+        run_scm_service,
+    )
+except Exception:
+    HAS_WIN32SERVICE = False
+
+    def main_standalone() -> None:
+        print("[FAIL] Служба недоступна (ошибка импорта service.py)")
+        sys.exit(1)
+
+    def run_scm_service() -> None:
+        print("[FAIL] SCM служба недоступна")
+        sys.exit(1)
+
+    def handle_service_command(args: list[str]) -> None:
+        print("[FAIL] Управление службой недоступно")
 
 
 def get_local_ip_addresses() -> list[str]:
@@ -213,8 +233,17 @@ def main() -> None:
             print("[ERROR] Укажите путь к файлу: bridge-agent drop <file>")
             sys.exit(1)
         target = args[1]
+        is_tty = hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
+        show_alert = sys.platform == "win32" and not is_tty
+        if "--alert" in args:
+            show_alert = True
+        if "--quiet" in args or "--no-alert" in args:
+            show_alert = False
         try:
-            dest = drop_file_to_pocket(target)
+            if show_alert:
+                dest = drop_file_to_pocket(target, show_alert=True)
+            else:
+                dest = drop_file_to_pocket(target)
             print(f"[OK] Файл скопирован в Карман: {dest}")
         except Exception as e:
             print(f"[ERROR] Ошибка копирования в Карман: {e}")

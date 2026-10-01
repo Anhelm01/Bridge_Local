@@ -266,7 +266,6 @@ def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> 
     console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
 
 
-
 def render_welcome_screen(
     theme: PaletteTheme = OFFICIAL_THEME,
     status_data: dict[str, Any] | None = None,
@@ -518,8 +517,6 @@ def render_dashboard_mode(
             title=(
                 "[dim]←/→ или 1..8: Табы | :send <f> | :exec <cmd> | :r Обновить | :q Выход[/dim]"
             ),
-
-
             border_style=theme.blue if input_buf else theme.secondary,
             padding=0,
         )
@@ -554,9 +551,7 @@ def render_pocket_mode(
     if files:
         page_size = 10
         offsets = (
-            pocket_data.setdefault("scroll_offsets", {})
-            if isinstance(pocket_data, dict)
-            else {}
+            pocket_data.setdefault("scroll_offsets", {}) if isinstance(pocket_data, dict) else {}
         )
         max_offset = max(0, len(files) - page_size)
         offset = max(0, min(offsets.get("POCKET", 0), max_offset))
@@ -633,9 +628,7 @@ def render_notes_mode(
     if notes_list:
         page_size = 6
         offsets = (
-            notes_data.setdefault("scroll_offsets", {})
-            if isinstance(notes_data, dict)
-            else {}
+            notes_data.setdefault("scroll_offsets", {}) if isinstance(notes_data, dict) else {}
         )
         max_offset = max(0, len(notes_list) - page_size)
         offset = max(0, min(offsets.get("NOTES", 0), max_offset))
@@ -653,9 +646,7 @@ def render_notes_mode(
             feed_lines.append(f"[bold {theme.purple}][{t}] {author}:[/]\n  {text}\n")
 
         if hidden_below > 0:
-            feed_lines.append(
-                f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]"
-            )
+            feed_lines.append(f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]")
     else:
         feed_lines.append(
             "[dim italic]Журнал заметок пуст. Введите текст в поле NOTE > для отправки.[/]\n"
@@ -689,7 +680,6 @@ def render_notes_mode(
  [← / → / 1..8 / Tab] Навигация
  [↑/↓, PgUp/PgDn] Скролл
  [Ctrl+C] Выход[/dim]""",
-
         title="[bold white][ ИНФО / СТАТИСТИКА ][/]",
         border_style=theme.secondary,
     )
@@ -728,11 +718,7 @@ def render_exec_mode(
 
     if history:
         page_size = 4
-        offsets = (
-            exec_data.setdefault("scroll_offsets", {})
-            if isinstance(exec_data, dict)
-            else {}
-        )
+        offsets = exec_data.setdefault("scroll_offsets", {}) if isinstance(exec_data, dict) else {}
         max_offset = max(0, len(history) - page_size)
         offset = max(0, min(offsets.get("EXEC", 0), max_offset))
         offsets["EXEC"] = offset
@@ -750,9 +736,7 @@ def render_exec_mode(
             lines.append(f"[dim](Код завершения: [bold {color}]{code}[/])[/dim]\n")
 
         if hidden_below > 0:
-            lines.append(
-                f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]"
-            )
+            lines.append(f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]")
     else:
         if not ctx["is_online"]:
             lines.append(
@@ -881,11 +865,7 @@ def render_dev_mode(
     all_dev_items = base_items + custom_logs
 
     page_size = 8
-    offsets = (
-        logs_data.setdefault("scroll_offsets", {})
-        if isinstance(logs_data, dict)
-        else {}
-    )
+    offsets = logs_data.setdefault("scroll_offsets", {}) if isinstance(logs_data, dict) else {}
     max_offset = max(0, len(all_dev_items) - page_size)
     offset = max(0, min(offsets.get("DEV", 0), max_offset))
     offsets["DEV"] = offset
@@ -899,16 +879,12 @@ def render_dev_mode(
     feed_lines.extend(visible_items)
 
     if hidden_below > 0:
-        feed_lines.append(
-            f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]"
-        )
+        feed_lines.append(f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]")
 
     feed_lines.append("[dim]───────────────────────────────────────────────────────────────────[/]")
     feed_lines.append(
         "[bold white]Управление: [←/→/1..8] Табы | [↑/↓, PgUp/PgDn] Скролл | [Ctrl+C] Выход[/]"
     )
-
-
 
     logs_feed = Panel(
         "\n".join(feed_lines),

@@ -97,7 +97,6 @@ PAGE_SIZES: dict[str, int] = {
 }
 
 
-
 def read_terminal_key(stream: Any = sys.stdin, timeout_sec: float = 0.04) -> str:
     """
     Надежно считывает один символ или полную escape-последовательность из потока ввода.
@@ -113,7 +112,7 @@ def read_terminal_key(stream: Any = sys.stdin, timeout_sec: float = 0.04) -> str
             try:
                 r, _, _ = select.select([stream], [], [], timeout_sec)
                 return bool(r)
-            except (io.UnsupportedOperation, OSError, ValueError):
+            except io.UnsupportedOperation, OSError, ValueError:
                 pass
         if hasattr(stream, "tell") and hasattr(stream, "getvalue"):
             pos = int(stream.tell())
@@ -325,7 +324,6 @@ def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
         return prev, True
 
     return current_mode, True
-
 
 
 def dispatch_tui_action(
@@ -739,7 +737,6 @@ def run_interactive_tui(
                 current_mode = NUM_KEY_MAP[ch]
                 input_buffer = ""
                 continue
-
 
             # 5. Переключение вкладок по F1..F8 (fallback)
             if ch in F_KEY_MAP:

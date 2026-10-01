@@ -151,7 +151,6 @@ def test_tui_key_actions() -> None:
     assert handle_key_action(":8", "DASH") == ("CONNECT", True)
 
 
-
 def test_tui_scroll_actions() -> None:
     """Проверяет работу скролла (Arrow Up/Down, Page Up/Down, Home, End) и ограничение смещения."""
     state: dict[str, Any] = {
