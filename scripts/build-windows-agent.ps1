@@ -19,9 +19,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
 
 Write-Host "============================================================"
 Write-Host "  Сборка автономного агента Bridge Local (bridge-agent.exe)"
+
 Write-Host "============================================================"
 
 # Определение корневого каталога репозитория

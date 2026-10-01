@@ -12,7 +12,15 @@ bridge_client_linux.tui — Терминальный интерфейс (TUI) Br
 from __future__ import annotations
 
 from bridge_client_linux.tui.animations import demo_process_animations
-from bridge_client_linux.tui.app import handle_key_action, run_interactive_tui
+from bridge_client_linux.tui.app import (
+    F_KEY_MAP,
+    MODES_ORDER,
+    PAGE_SIZES,
+    handle_key_action,
+    handle_scroll_action,
+    read_terminal_key,
+    run_interactive_tui,
+)
 from bridge_client_linux.tui.logos import (
     BRIDGES_MASTER,
     DRAWBRIDGE_HEADER,
@@ -37,10 +45,15 @@ __all__ = [
     "BRIDGES_MASTER",
     "DRAWBRIDGE_HEADER",
     "DRAWBRIDGE_INDUSTRIAL",
+    "F_KEY_MAP",
+    "MODES_ORDER",
     "OFFICIAL_THEME",
+    "PAGE_SIZES",
     "PaletteTheme",
     "demo_process_animations",
     "handle_key_action",
+    "handle_scroll_action",
+    "read_terminal_key",
     "render_config_mode",
     "render_current_mode",
     "render_dashboard_mode",

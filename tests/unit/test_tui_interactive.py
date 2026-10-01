@@ -1,32 +1,40 @@
 """
-Unit tests for interactive TUI buttons, keyboard navigation, and rendering.
-Verifies that all 6 modes, welcome screen, theme spec, animations, and key actions work flawlessly.
+Unit tests for interactive TUI buttons, keyboard navigation, and rendering in Bridge Local.
+Verifies:
+  - F1..F8 direct tab addressing across all 8 tabs.
+  - Scroll navigation (Arrow Up/Down, Page Up/Down, Home, End) and bounds clamping.
+  - Letters do not trigger mode changes or quit.
+  - Escape sequence reading and parsing.
+  - Screen rendering with scrolling indicators.
 """
 
 from __future__ import annotations
 
-import sys
-from unittest.mock import patch
+import io
+from typing import Any
 
-from ref.AI.ascii_preview import (
+from bridge_client_linux.tui import (
+    MODES_ORDER,
     OFFICIAL_THEME,
     demo_process_animations,
     handle_key_action,
-    main,
+    handle_scroll_action,
+    read_terminal_key,
     render_config_mode,
     render_current_mode,
     render_dashboard_mode,
     render_dev_mode,
     render_exec_mode,
+    render_mode_tabs,
     render_notes_mode,
+    render_operational_header,
     render_pocket_mode,
     render_theme_spec,
     render_welcome_screen,
-    resolve_args,
 )
 
 
-def test_official_theme_attributes():
+def test_official_theme_attributes() -> None:
     """Проверяет полноту атрибутов официальной темы (никаких AttributeError)."""
     assert OFFICIAL_THEME.name == "Titanium Vivid / Cyber-Industrial"
     assert OFFICIAL_THEME.primary == "#FFFFFF"
@@ -39,106 +47,207 @@ def test_official_theme_attributes():
     assert OFFICIAL_THEME.red == "#FF3366"
 
 
-def test_key_action_buttons():
-    """Тестирует переключение всех 6 вкладок и управляющих клавиш."""
-    # Цифровые клавиши [1..6]
-    assert handle_key_action("1", "POCKET") == ("DASH", True)
-    assert handle_key_action("2", "DASH") == ("POCKET", True)
-    assert handle_key_action("3", "DASH") == ("NOTES", True)
-    assert handle_key_action("4", "DASH") == ("EXEC", True)
-    assert handle_key_action("5", "DASH") == ("CONFIG", True)
-    assert handle_key_action("6", "DASH") == ("DEV", True)
+def test_f1_to_f8_tab_switching() -> None:
+    """Тестирует прямое переключение всех 8 вкладок через клавиши F1..F8."""
+    # F1: SPLASH
+    for k in ("\x1bOP", "\x1b[[A", "\x1b[11~", "f1", "F1"):
+        assert handle_key_action(k, "DASH") == ("SPLASH", True)
 
-    # Функциональные клавиши F1..F6 (escape sequences)
-    assert handle_key_action("\x1bOP", "DASH") == ("DASH", True)
-    assert handle_key_action("\x1bOQ", "DASH") == ("POCKET", True)
-    assert handle_key_action("\x1bOR", "DASH") == ("NOTES", True)
-    assert handle_key_action("\x1bOS", "DASH") == ("EXEC", True)
-    assert handle_key_action("\x1b[15~", "DASH") == ("CONFIG", True)
-    assert handle_key_action("\x1b[17~", "DASH") == ("DEV", True)
+    # F2: DASH
+    for k in ("\x1bOQ", "\x1b[[B", "\x1b[12~", "f2", "F2"):
+        assert handle_key_action(k, "SPLASH") == ("DASH", True)
 
-    # Именованные режимы
-    assert handle_key_action("dev", "DASH") == ("DEV", True)
-    assert handle_key_action("logs", "DASH") == ("DEV", True)
-    assert handle_key_action("w", "DASH") == ("WELCOME", True)
-    assert handle_key_action("a", "DASH") == ("ANIM", True)
+    # F3: POCKET
+    for k in ("\x1bOR", "\x1b[[C", "\x1b[13~", "f3", "F3"):
+        assert handle_key_action(k, "DASH") == ("POCKET", True)
 
-    # Циклическое переключение по Tab
-    assert handle_key_action("\t", "DASH") == ("POCKET", True)
-    assert handle_key_action("\t", "POCKET") == ("NOTES", True)
-    assert handle_key_action("\t", "NOTES") == ("EXEC", True)
-    assert handle_key_action("\t", "EXEC") == ("CONFIG", True)
-    assert handle_key_action("\t", "CONFIG") == ("DEV", True)
-    assert handle_key_action("\t", "DEV") == ("DASH", True)
+    # F4: NOTES
+    for k in ("\x1bOS", "\x1b[[D", "\x1b[14~", "f4", "F4"):
+        assert handle_key_action(k, "DASH") == ("NOTES", True)
 
-    # Выход по [Q] / Escape / Ctrl+C
-    assert handle_key_action("q", "DASH") == ("DASH", False)
-    assert handle_key_action("Q", "DASH") == ("DASH", False)
-    assert handle_key_action("\x1b", "DASH") == ("DASH", False)
-    assert handle_key_action("\x03", "DASH") == ("DASH", False)
+    # F5: EXEC
+    for k in ("\x1b[15~", "f5", "F5"):
+        assert handle_key_action(k, "DASH") == ("EXEC", True)
+
+    # F6: CONFIG
+    for k in ("\x1b[17~", "f6", "F6"):
+        assert handle_key_action(k, "DASH") == ("CONFIG", True)
+
+    # F7: DEV
+    for k in ("\x1b[18~", "f7", "F7"):
+        assert handle_key_action(k, "DASH") == ("DEV", True)
+
+    # F8: CONNECT
+    for k in ("\x1b[19~", "f8", "F8"):
+        assert handle_key_action(k, "DASH") == ("CONNECT", True)
 
 
-def test_render_all_screens_without_exceptions():
-    """Тестирует отрисовку каждого экрана на отсутствие любых падений и исключений."""
-    # Все 6 оперативных окон
-    render_dashboard_mode(OFFICIAL_THEME)
-    render_pocket_mode(OFFICIAL_THEME)
-    render_notes_mode(OFFICIAL_THEME)
-    render_exec_mode(OFFICIAL_THEME)
-    render_config_mode(OFFICIAL_THEME)
-    render_dev_mode(OFFICIAL_THEME)
+def test_tab_and_shift_tab_navigation() -> None:
+    """Тестирует циклическое переключение всех 8 вкладок по Tab и Shift+Tab."""
+    order = MODES_ORDER
+    # Прямой цикл Tab
+    for i, mode in enumerate(order):
+        expected_next = order[(i + 1) % len(order)]
+        assert handle_key_action("\t", mode) == (expected_next, True)
 
-    # Экран приветствия (Neofetch), спецификация темы, анимации
-    render_welcome_screen(OFFICIAL_THEME)
-    render_theme_spec(OFFICIAL_THEME)
-    demo_process_animations(OFFICIAL_THEME)
-
-    # Диспетчер render_current_mode для каждого ключа
-    test_modes = [
-        "DASH",
-        "POCKET",
-        "NOTES",
-        "EXEC",
-        "CONFIG",
-        "DEV",
-        "WELCOME",
-        "ANIM",
-        "UNKNOWN",
-    ]
-    for mode in test_modes:
-        render_current_mode(mode, OFFICIAL_THEME)
+    # Обратный цикл Shift+Tab
+    for i, mode in enumerate(order):
+        expected_prev = order[(i - 1) % len(order)]
+        assert handle_key_action("\x1b[Z", mode) == (expected_prev, True)
+        assert handle_key_action("shift+tab", mode) == (expected_prev, True)
 
 
-def test_cli_argument_resolution():
-    """Тестирует парсер аргументов командной строки."""
-    assert resolve_args(["welcome"]) == "welcome"
-    assert resolve_args(["dev"]) == "dev"
-    assert resolve_args(["logs"]) == "logs"
-    assert resolve_args(["modes"]) == "modes"
-    assert resolve_args(["all"]) == "all"
-    assert resolve_args(["spec"]) == "spec"
-    assert resolve_args(["tui"]) == "tui"
-    assert resolve_args(["interactive"]) == "interactive"
-    assert resolve_args(["dash"]) == "dash"
-    assert resolve_args(["pocket"]) == "pocket"
-    assert resolve_args(["notes"]) == "notes"
-    assert resolve_args(["exec"]) == "exec"
-    assert resolve_args(["config"]) == "config"
+def test_letters_do_not_switch_modes_or_quit() -> None:
+    """Проверяет, что буквы (w, q, r, c, a и т.д.) не переключают экраны и не выходят."""
+    letters = ["w", "W", "q", "Q", "r", "R", "c", "C", "a", "A", "d", "e", "p", "n", "x", "z"]
+    for letter in letters:
+        assert handle_key_action(letter, "DASH") == ("DASH", True)
+        assert handle_key_action(letter, "POCKET") == ("POCKET", True)
+        assert handle_key_action(letter, "NOTES") == ("NOTES", True)
+        assert handle_key_action(letter, "EXEC") == ("EXEC", True)
+        assert handle_key_action(letter, "SPLASH") == ("SPLASH", True)
+
+    # Выход только по специальным управляющим символам и командам
+    assert handle_key_action("\x03", "DASH") == ("DASH", False)  # Ctrl+C
+    assert handle_key_action("\x11", "DASH") == ("DASH", False)  # Ctrl+Q
+    assert handle_key_action(":q", "DASH") == ("DASH", False)
+    assert handle_key_action("exit", "DASH") == ("DASH", False)
+    assert handle_key_action("quit", "DASH") == ("DASH", False)
 
 
-def test_main_cli_execution():
-    """Тестирует запуск main() с различными аргументами без падений."""
-    with patch.object(sys, "argv", ["preview.py", "spec"]):
-        main()
+def test_scroll_system_up_down_pgup_pgdn_home_end() -> None:
+    """Тестирует полную систему скролла: Arrow Up/Down, Page Up/Down, Home, End и границы."""
+    state: dict[str, Any] = {
+        "pocket_files": [{"name": f"f_{i}"} for i in range(30)],
+        "notes_list": [{"text": f"n_{i}"} for i in range(25)],
+        "exec_history": [(f"c_{i}", f"o_{i}", 0) for i in range(20)],
+        "dev_logs": [f"log_{i}" for i in range(20)],
+        "scroll_offsets": {"POCKET": 0, "NOTES": 0, "EXEC": 0, "DEV": 0},
+    }
 
-    with patch.object(sys, "argv", ["preview.py", "welcome"]):
-        main()
+    # --- POCKET (page_size = 10, total = 30, max_offset = 20) ---
+    assert handle_scroll_action("\x1b[B", "POCKET", state) is True  # 1 вниз
+    assert state["scroll_offsets"]["POCKET"] == 1
 
-    with patch.object(sys, "argv", ["preview.py", "dev"]):
-        main()
+    assert handle_scroll_action("\x1b[6~", "POCKET", state) is True  # PgDn (+10)
+    assert state["scroll_offsets"]["POCKET"] == 11
 
-    with patch.object(sys, "argv", ["preview.py", "dash"]):
-        main()
+    assert handle_scroll_action("\x1b[F", "POCKET", state) is True  # End
+    assert state["scroll_offsets"]["POCKET"] == 20
 
-    with patch.object(sys, "argv", ["preview.py", "modes"]):
-        main()
+    assert handle_scroll_action("\x1b[B", "POCKET", state) is True  # Ниже конца не идет
+    assert state["scroll_offsets"]["POCKET"] == 20
+
+    assert handle_scroll_action("\x1b[A", "POCKET", state) is True  # 1 вверх
+    assert state["scroll_offsets"]["POCKET"] == 19
+
+    assert handle_scroll_action("\x1b[5~", "POCKET", state) is True  # PgUp (-10)
+    assert state["scroll_offsets"]["POCKET"] == 9
+
+    assert handle_scroll_action("\x1b[H", "POCKET", state) is True  # Home
+    assert state["scroll_offsets"]["POCKET"] == 0
+
+    assert handle_scroll_action("\x1b[A", "POCKET", state) is True  # Выше начала не идет
+    assert state["scroll_offsets"]["POCKET"] == 0
+
+    # --- NOTES (page_size = 6, total = 25, max_offset = 19) ---
+    assert handle_scroll_action("\x1b[B", "NOTES", state) is True
+    assert state["scroll_offsets"]["NOTES"] == 1
+    assert handle_scroll_action("\x1b[6~", "NOTES", state) is True
+    assert state["scroll_offsets"]["NOTES"] == 7
+    assert handle_scroll_action("\x1b[F", "NOTES", state) is True
+    assert state["scroll_offsets"]["NOTES"] == 19
+    assert handle_scroll_action("\x1b[H", "NOTES", state) is True
+    assert state["scroll_offsets"]["NOTES"] == 0
+
+    # --- EXEC (page_size = 4, total = 20, max_offset = 16) ---
+    assert handle_scroll_action("\x1b[6~", "EXEC", state) is True
+    assert state["scroll_offsets"]["EXEC"] == 4
+    assert handle_scroll_action("\x1b[F", "EXEC", state) is True
+    assert state["scroll_offsets"]["EXEC"] == 16
+
+
+def test_escape_sequence_reader_robustness() -> None:
+    """Тестирует безотказное чтение escape-последовательностей терминала."""
+    # F1..F8
+    for code in [
+        "\x1bOP",
+        "\x1b[[A",
+        "\x1b[11~",
+        "\x1bOQ",
+        "\x1b[[B",
+        "\x1b[12~",
+        "\x1bOR",
+        "\x1b[[C",
+        "\x1b[13~",
+        "\x1bOS",
+        "\x1b[[D",
+        "\x1b[14~",
+        "\x1b[15~",
+        "\x1b[17~",
+        "\x1b[18~",
+        "\x1b[19~",
+    ]:
+        stream = io.StringIO(code)
+        assert read_terminal_key(stream) == code
+
+    # Стрелки и скролл
+    for code in [
+        "\x1b[A",
+        "\x1b[B",
+        "\x1b[5~",
+        "\x1b[6~",
+        "\x1b[H",
+        "\x1b[1~",
+        "\x1b[F",
+        "\x1b[4~",
+    ]:
+        stream = io.StringIO(code)
+        assert read_terminal_key(stream) == code
+
+    # Одиночный escape
+    stream = io.StringIO("\x1b")
+    assert read_terminal_key(stream) == "\x1b"
+
+
+def test_render_all_screens_with_scroll_indicators() -> None:
+    """Тестирует отрисовку экранов с индикаторами скрытых строк."""
+    theme = OFFICIAL_THEME
+    state = {
+        "pocket_files": [
+            {"name": f"test_file_{i}.txt", "size": "1.2 MB", "status": "READY"}
+            for i in range(25)
+        ],
+        "notes_list": [
+            {"time": "14:30:00", "author": "NODE_A", "text": f"Заметка #{i}"}
+            for i in range(15)
+        ],
+        "exec_history": [
+            (f"Get-Process -Id {i}", f"Process info {i}", 0) for i in range(10)
+        ],
+        "dev_logs": [f"[TRACE] Network packet {i}" for i in range(16)],
+        "scroll_offsets": {"POCKET": 5, "NOTES": 3, "EXEC": 2, "DEV": 4},
+        "is_online": True,
+        "input_buffer": "",
+        "status_msg": "OK",
+    }
+
+    # Отрисовка всех основных экранов
+    render_welcome_screen(theme, state)
+    render_operational_header(theme, state)
+    render_dashboard_mode(theme, state)
+    render_pocket_mode(theme, state)
+    render_notes_mode(theme, state)
+    render_exec_mode(theme, state)
+    render_config_mode(theme, state)
+    render_dev_mode(theme, state)
+    render_theme_spec(theme)
+    demo_process_animations(theme, steps=1)
+
+    # Проверка плашки табов
+    render_mode_tabs("POCKET", theme)
+    render_mode_tabs("DASH", theme)
+    render_mode_tabs("SPLASH", theme)
+
+    for mode in ["SPLASH", "DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]:
+        render_current_mode(mode, theme, state)

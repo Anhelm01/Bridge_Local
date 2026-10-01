@@ -1,215 +1,199 @@
-# Bridge_local
+# Bridge Local
 
-**Extensible Cross-Platform Inter-Node Orchestration & Communication Platform**  
-*Linux ↔ Windows LAN Backbone | Pluggable Layered Architecture | Headless AI Operator & Human TUI*
+**Высокопроизводительная модульная платформа межмашинного взаимодействия (LAN Backbone)**  
+*Прямой P2P мост Linux <-> Windows | Модульная слоистая архитектура | Двойной режим: TUI для человека и Headless JSON для ИИ-агентов*
 
-[![CI](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml/badge.svg)](https://github.com/Anhelm01/Bridge_Local/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.14-00D2FF.svg)
-![Tests](https://img.shields.io/badge/tests-312%20passed-00FF66.svg)
-![Mypy](https://img.shields.io/badge/mypy-strict-7D8590.svg)
-![Ruff](https://img.shields.io/badge/code%20style-ruff-black.svg)
-![Architecture](https://img.shields.io/badge/architecture-modular%20platform-blue.svg)
-
-> **Status:** Release v0.1.0 Ready | 312 tests passing (100% green) | Standalone Windows & Linux ZIP distributions available.
+[![Python](https://img.shields.io/badge/python-3.12%20--%203.14-00D2FF.svg)](https://www.python.org/)
+[![Pydantic](https://img.shields.io/badge/contracts-pydantic%20v2-C084FC.svg)](https://docs.pydantic.dev/)
+[![Tests](https://img.shields.io/badge/tests-314%20passed-00FF66.svg)](tests/)
+[![Type Checked](https://img.shields.io/badge/types-mypy%20strict-7D8590.svg)](src/)
+[![Code Style](https://img.shields.io/badge/code%20style-ruff-black.svg)](https://github.com/astral-sh/ruff)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
 
-## Operator Guides & Documentation
+## 1. Назначение платформы
 
-- [**Linux Operator Guide (docs/README_LINUX.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README_LINUX.md) — standalone `bridge-cli` setup, TUI navigation, systemd.
-- [**Windows Operator Guide (docs/README_WINDOWS.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README_WINDOWS.md) — `bridge-agent.exe`, SCM service, setup wizard, context menu.
-- [**Deployment & Build Guide (docs/DEPLOYMENT.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/DEPLOYMENT.md) — step-by-step from scratch build & launch.
-- [**Documentation Portal (docs/README.md)**](file:///home/anhelm/Projects/Bridge_Local/docs/README.md) — central documentation index.
+**Bridge Local** — это легковесный, высокопроизводительный P2P мост между рабочими станциями Linux и Windows в локальной сети (LAN).
+
+Платформа спроектирована как универсальная шина межмашинного взаимодействия, исключающая зависимость от тяжеловесных сторонних протоколов (Samba, SMB, NFS, WebDAV) и внешних облачных сервисов:
+- **Общее хранилище («Карман» / Pocket Storage):** Потоковая передача файлов блоками по 64 КБ с валидацией контрольных сумм SHA-256 и атомарным переименованием.
+- **Мгновенный обмен заметками (Notes Engine):** Оперативная отправка текста, гиперссылок и кодовых фрагментов между экранами с сохранением в JSONL-журнале.
+- **Удаленное выполнение PowerShell (Remote Execution):** Запуск административных скриптов на Windows с консоли Linux с принудительной кодировкой UTF-8 (`chcp 65001`), контролем таймаутов и автоматическим каскадным уничтожением зависших дочерних процессов.
+- **Двойной интерфейс оператора:**
+  - **Для человека:** Полноэкранный терминальный TUI с палитрой Titanium Vivid, переключением 8 вкладок через стрелки ← / →, цифры 1..8, Tab и скроллингом списков.
+
+  - **Для ИИ-агентов (Antigravity agy_cli):** Строгий машиночитаемый режим `--json` с детерминированными кодами возврата (0..5), нулевым ANSI-мусором и отсутствием блокировок ввода.
 
 ---
 
-## Architectural Platform Overview
-
-`Bridge_local` is engineered not merely as a point-to-point utility, but as a robust, highly extensible, and modular inter-node communication platform designed for long-term scalability.
-
-### Core Architectural Principles
-
-- **Strict Decoupling & Swappability:** Every architectural layer (`bridge_core`, length-prefix wire framing, JSON-RPC dispatcher, async transport, pocket storage engine, notes engine, process executor, security/auth) is strictly decoupled with clean abstraction boundaries. Any component can be replaced or upgraded (alternative transports, different process runners, pluggable storage backends) without cascading refactors.
-- **Portability into Other Projects:** Core modules (`bridge_core`) are developed as clean, standalone building blocks capable of being extracted, distributed as standalone packages, or directly imported into distributed automation pipelines and multi-agent coordination frameworks.
-- **Contract-Driven Interfaces:** All inter-layer and inter-node interactions rely strictly on validated DTO contracts (Pydantic V2) and explicit public interfaces, preventing tightly coupled monolithic dependencies.
-- **Forward-Compatible Multi-Node Topology:** Wire protocol envelopes and DTO models explicitly carry `source_node` and `target_node` routing fields. This enables 3+ device mesh topologies and cross-account agent orchestration without breaking wire compatibility.
+## 2. Архитектура и стек технологий
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        BRIDGE_LOCAL PLATFORM                           │
-├─────────────────────┬──────────────────────────────────────────────────┤
-│ Security Layer      │ HMAC-SHA256, Nonce Replay Cache, Clock Skew Sync │
-│ Wire Protocol       │ 6-byte Magic Framing ('BR'), Length-Prefix Codec │
-│ Transport & RPC     │ Asyncio TCP Streaming, JSON-RPC 2.0 Dispatcher   │
-│ Execution Engine    │ PowerShell Runner, Process Tree Killer, UTF-8    │
-│ Pocket Storage      │ 64 KB Chunk Streaming, SHA-256 Verify, Atomic    │
-│ Notes Subsystem     │ Persistent JSONL Engine, Filter & Acknowledgment │
-│ Operator Layer      │ Human TUI (Titanium Vivid) + AI Headless --json  │
-└─────────────────────┴──────────────────────────────────────────────────┘
++-------------------------------------------------------------------------------+
+|                             ОПЕРАТОРСКИЙ СЛОЙ                                 |
+|   ┌──────────────────────────────┐        ┌───────────────────────────────┐   |
+|   │   Human Operator (TUI/CLI)   │        │     AI Operator (agy_cli)     │   |
+|   │   Rich, 8 Tabs, Spinners     │        │     --json, Strict Exit Codes │   |
+|   └──────────────┬───────────────┘        └───────────────┬───────────────┘   |
++──────────────────┼────────────────────────────────────────┼───────────────────+
+|                  ▼                                        ▼                   |
+|   ┌───────────────────────────────────────────────────────────────────────┐   |
+|   │                         bridge_client_linux                           │   |
+|   │     ConnectionManager | ExecClient | PocketClient | NotesClient       │   |
+|   │     Interactive TUI Engine (8 Tabs, Arrows/Digits/Tab Nav)            │   |
+
+|   └──────────────────────────────────┬────────────────────────────────────┘   |
++──────────────────────────────────────┼────────────────────────────────────────+
+|                                      ▼                                        |
+|   ┌───────────────────────────────────────────────────────────────────────┐   |
+|   │                             bridge_core                               │   |
+|   │  ┌───────────────────────┐ ┌──────────────────────┐ ┌──────────────┐  │   |
+|   │  │   protocol.py ('BR')  │ │  security.py (HMAC)  │ │ models.py    │  │   |
+|   │  └───────────────────────┘ └──────────────────────┘ └──────────────┘  │   |
+|   │  ┌───────────────────────┐ ┌──────────────────────┐ ┌──────────────┐  │   |
+|   │  │ transport.py (Async)  │ │  pocket.py (Storage) │ │ notes.py     │  │   |
+|   │  └───────────────────────┘ └──────────────────────┘ └──────────────┘  │   |
+|   │  ┌───────────────────────┐ ┌──────────────────────┐ ┌──────────────┐  │   |
+|   │  │  heartbeat.py (Probe) │ │  logger.py (JSONL)   │ │ codec.py     │  │   |
+|   │  └───────────────────────┘ └──────────────────────┘ └──────────────┘  │   |
+|   └──────────────────────────────────┬────────────────────────────────────┘   |
++──────────────────────────────────────┼────────────────────────────────────────+
+|                                      │ TCP Streaming (Port 9732)              |
+|                                      ▼                                        |
+|   ┌───────────────────────────────────────────────────────────────────────┐   |
+|   │                          bridge_agent_win                             │   |
+|   │  ┌───────────────────────┐ ┌──────────────────────┐ ┌──────────────┐  │   |
+|   │  │  service.py (SCM)     │ │  executor.py (Posh)  │ │ process_kill │  │   |
+|   │  └───────────────────────┘ └──────────────────────┘ └──────────────┘  │   |
+|   │  ┌───────────────────────┐ ┌──────────────────────┐ ┌──────────────┐  │   |
+|   │  │  context_menu.py      │ │  Watchdog PocketSync │ │ Win SCM Loop │  │   |
+|   │  └───────────────────────┘ └──────────────────────┘ └──────────────┘  │   |
+|   └───────────────────────────────────────────────────────────────────────┘   |
++-------------------------------------------------------------------------------+
 ```
 
----
-
-## Core Platform Subsystems
-
-### 1. Linux CLI & AI Operator Interface (`bridge-cli`)
-- **Dual Target Persona:**
-  - **Human Ergonomics:** Interactive TUI with 8 tabs (`Tab` / `Shift+Tab` navigation), localized non-flickering Braille animations (`⠋⠙⠹...`, `[>>>]`), and Neofetch splash.
-  - **AI Operator Protocol (`agy_cli`):** Fully deterministic `--json` output, zero ANSI-escape artifacts, non-blocking execution, and standardized exit codes:
-    - `0` (`SUCCESS`): Command executed successfully.
-    - `1` (`GENERAL_ERROR`): Invalid arguments or internal failure.
-    - `2` (`NETWORK_ERROR`): Connection refused or host unreachable.
-    - `3` (`AUTH_ERROR`): Pre-shared key mismatch or replay detected.
-    - `4` (`COMMAND_FAILED`): Remote execution terminated with non-zero exit code.
-    - `5` (`TIMEOUT`): Command execution or RPC response timed out.
-
-### 2. Pocket Storage Engine (Карман)
-- Standalone peer-to-peer file synchronizer without SMB, Samba, WebDAV, or cloud dependencies.
-- Streaming 64 KB chunk transfers with SHA-256 integrity verification.
-- Atomic temporary `.<filename>.part` staging with atomic `os.replace` promotion.
-- Native filesystem change detection with debouncing (`watchdog`).
-- Direct file send command (`bridge-cli send <file1> [file2...]`) and Windows Explorer right-click integration.
-
-### 3. Notes Subsystem (Записки)
-- Rapid two-way text, snippet, and link exchange between nodes.
-- Persistent atomic JSONL storage with time/limit filtering and read status acknowledgments.
-
-### 4. Remote Execution Engine (PowerShell)
-- Strict UTF-8 console output decoding (`chcp 65001`, `$OutputEncoding`).
-- Recursive process tree termination (`taskkill /F /T`) by timeout without lingering background processes.
-
-### 5. Windows Service Daemon
-- Background system daemon running before user logon.
-- Real-time heartbeat probes with system health telemetry (CPU, RAM, Uptime).
-- Daily rotating atomic JSONL audit trail (`pocket/logs/YYYY-MM-DD.jsonl`) with synchronous `os.fsync`.
+### Технологический стек:
+- **Среда выполнения:** Python 3.12 - 3.14. Доступны автономные x64-дистрибутивы без внешних зависимостей.
+- **Типизация и контракты:** Pydantic V2 с полной изоляцией DTO-моделей (`bridge_core.models`).
+- **Бинарный транспорт:** Собственный Length-Prefixed Wire Framing: 2 байта маркера `'BR'` (`0x42 0x52`), 4 байта длины (Big-Endian uint32) и полезная нагрузка до 64 МБ.
+- **Криптография и безопасность:** HMAC-SHA256 подпись каждого фрейма на базе Pre-Shared Key (PSK), контроль дрейфа часов (Clock Skew) и LRU-кэш одноразовых номеров Nonce для защиты от Replay-атак.
+- **Удаленный исполнитель:** Асинхронный PowerShell Runner с принудительной инициализацией UTF-8 (`chcp 65001`), контролем таймаутов и уничтожителем дерева процессов (`taskkill /F /T`).
+- **Служба Windows:** Демон Windows SCM на базе `pywin32` (`servicemanager`) с политикой автоматического восстановления при сбоях.
+- **Терминальный клиент:** Typer CLI + Rich TUI с полноэкранным рендерингом в альтернативном экранном буфере.
 
 ---
 
-## Quick Start (CLI Usage)
+## 3. Быстрый старт
+
+### Шаг 1: Запуск агента на Windows
+1. Скачайте и распакуйте релизный архив `BridgeLocal-Windows-x64.zip` (например, в `C:\BridgeLocal`).
+2. Запустите двойным кликом `setup_connection.bat`:
+   - Мастер определит активный IPv4-адрес сетевой карты (например, `192.168.1.150`).
+   - Подтвердите порт `9732` и секретный токен PSK.
+3. Выберите режим запуска:
+   - **Для отладки в окне:** Запустите `run_agent.bat`.
+   - **Для постоянной фоновой службы:** Кликните правой кнопкой по `install_service.bat` -> **«Запуск от имени администратора»**.
+
+### Шаг 2: Подключение с Linux
+1. Распакуйте `BridgeLocal-Linux-x64.zip` (или установите через `uv tool install .`):
+   ```bash
+   chmod +x bridge-cli
+   ```
+2. Подключитесь к машине Windows:
+   ```bash
+   bridge-cli connect 192.168.1.150:9732
+   ```
+3. Проверьте качество связи:
+   ```bash
+   bridge-cli ping
+   ```
+4. Запустите терминальный интерфейс:
+   ```bash
+   bridge-cli tui
+   ```
+
+### Шаг 3: Основные повседневные команды CLI
 
 ```bash
-# 1. Connect and save Windows target IP:port directly:
-bridge-cli connect 192.168.1.150:9732
+# 1. Прямая отправка файлов в удаленный карман Windows (Direct File Drop):
+bridge-cli send document.pdf archive.zip
 
-# 2. Interactive TUI with 8 tabs (SPLASH, DASH, POCKET, NOTES, EXEC, CONFIG, DEV, CONNECT):
-bridge-cli tui
+# 2. Мгновенная отправка заметки или ссылки:
+bridge-cli note send "https://github.com/Anhelm01/Bridge_Local"
 
-# 3. Check node status (Human table vs AI JSON):
+# 3. Удаленное выполнение команды PowerShell:
+bridge-cli exec "Get-Service -Name BridgeLocalAgent"
+
+# 4. Просмотр сводного статуса всех подсистем:
 bridge-cli status
-bridge-cli status --json
 
-# 4. Fast Direct File Drop (send any file to Windows Pocket):
-bridge-cli send ~/Downloads/archive.zip photo.png
-
-# 5. Remote PowerShell command execution:
-bridge-cli exec "Get-Service -Name BridgeLocalAgent" --json
-
-# 6. Pocket storage operations:
-bridge-cli pocket status --json
-bridge-cli pocket push /path/to/archive.zip --json
-bridge-cli pocket pull document.pdf --json
-bridge-cli pocket sync --direction both --json
-
-# 7. Fast notes sharing:
-bridge-cli note send "https://github.com/project/spec" --json
-bridge-cli note list --limit 10 --json
-bridge-cli note read <note_id> --json
-
-# 8. Windows Explorer Context Menu & Setup:
-bridge-agent setup                   # Interactive setup wizard with IPv4 auto-detection
-bridge-agent install-context-menu    # Register right-click menu in HKCU
-bridge-agent drop <file_or_dir>      # CLI drop helper
+# 5. Двунаправленная синхронизация общего хранилища файлов:
+bridge-cli pocket sync
 ```
 
 ---
 
-## Packaging & Production Deployment
+## 4. Терминальный интерфейс TUI
 
-For complete, step-by-step production setup, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Интерфейс запускается командой `bridge-cli tui` (или `bridge-cli` без аргументов в интерактивном терминале). Он построен на базе палитры **Titanium Vivid** и разделен на 8 функциональных экранов:
 
-### 1. Linux Client Installation
-```bash
-# Option A: Isolated user-level CLI tool via uv (recommended):
-uv tool install .
-
-# Option B: Install from built wheel:
-pip install dist/bridge_local-0.1.0-py3-none-any.whl
+```
+[BRIDGE] █ [SPLASH] │ [DASH] │ [POCKET] │ [NOTES] │ [EXEC] │ [CONFIG] │ [DEV] │ [CONNECT]
 ```
 
-### 2. Windows Agent & SCM Service Deployment
-```powershell
-# Automated installation: SCM registration, Defender exclusions, Search Indexing disabling, Firewall rule:
-powershell -ExecutionPolicy Bypass -File .\scripts\install-service.ps1 -Port 9732
+### Назначение вкладок и клавиши прямого перехода (1..8, ← / →, Tab, F1..F8):
 
-# Verify service status:
-Get-Service -Name BridgeLocalAgent
+| Клавиша | Вкладка | Описание |
+|:---:|:---|:---|
+| **`1`** / `F1` | **SPLASH** | Фирменный экран приветствия BRIDGES Master и аппаратная Neofetch-сводка. |
+| **`2`** / `F2` | **DASH** | Главная операционная панель: статус связи, пинг, ресурсы Windows-агента, очереди файлов. |
+| **`3`** / `F3` | **POCKET** | Таблица файлов кармана, направление синхронизации, хэши SHA-256 и строка прямой отправки файлов (`PUSH FILE >`). |
+| **`4`** / `F4` | **NOTES** | Лента текстовых сообщений и ссылок с отметками времени и автором, строка ввода новой заметки (`NOTE >`). |
+| **`5`** / `F5` | **EXEC** | Удаленный терминал PowerShell: журнал выполненных команд, потоки stdout/stderr и строка ввода (`PS C:\>`). |
+| **`6`** / `F6` | **CONFIG** | Реестр зарегистрированных узлов сети, сетевые адреса, тайминги и статус HMAC-SHA256. |
+| **`7`** / `F7` | **DEV** | Диагностический журнал трассировки сетевых пакетов, таймингов fail-fast и системных путей. |
+| **`8`** / `F8` | **CONNECT** | Быстрая перенастройка целевого узла (IP, порт, токен) без выхода из TUI. |
 
-# Graceful uninstallation and cleanup:
-powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-service.ps1
-```
+### Горячие клавиши управления:
+- `Стрелка Влево` (`←`) / `Стрелка Вправо` (`→`): Мгновенное переключение на предыдущую / следующую вкладку.
+- `Цифры 1..8`: Прямой переход к вкладке 1..8 в режимах просмотра (или через `Alt+1`..`Alt+8`).
+- `Tab` / `Shift+Tab`: Последовательное переключение вкладок вперед и назад.
+- `Стрелка Вверх` / `Стрелка Вниз` (`↑` / `↓`): Построчный вертикальный скроллинг списков файлов в POCKET, заметок в NOTES и журнала в DEV.
+- `Page Up` / `Page Down`: Постраничный скроллинг списков на высоту экрана.
+- `Enter`: Отправка введенного текста (команды, пути файла или заметки).
+- `Escape`: Очистка строки ввода / быстрый возврат на вкладку DASH.
+- `Ctrl+C` / `Ctrl+Q`: Выход из TUI с корректным закрытием экранного буфера.
+
 
 ---
 
-## Project Structure
+## 5. Протокол взаимодействия для ИИ-агентов (`agy_cli`)
 
-```
-Bridge_Local/
-├── src/
-│   ├── bridge_core/        # Decoupled platform core: protocol framing, async transport,
-│   │                       # models, logger, security, codec, pocket engine, notes engine
-│   ├── bridge_agent_win/   # Windows service daemon, PowerShell runner, process killer, context menu
-│   ├── bridge_client_linux/# Linux CLI client & TUI (Human + agy_cli headless engine)
-│   └── bridge_local/       # Main CLI entrypoint (bridge-cli = bridge_local:main)
-├── scripts/                # Production deployment and service administration scripts
-│   ├── install-service.ps1 # Automated Windows SCM service installation & hardening
-│   ├── uninstall-service.ps1 # Graceful SCM service teardown & rule cleanup
-│   ├── build-windows-agent.ps1 # PyInstaller standalone EXE builder
-│   └── systemd/            # Linux systemd service unit templates
-├── tests/
-│   ├── unit/               # Unit, packaging, and edge-case tests
-│   ├── integration/        # Full end-to-end multi-layer tests over TCP loopback
-│   └── mocks/              # Mock fixtures for standalone Linux development
-├── docs/                   # Full documentation suite, architecture, and guides
-├── ref/
-│   ├── Hum/                # Human references (concepts, notes, scripts)
-│   └── AI/                 # AI architectural proposals, analyses, logo concepts
-├── bridge-agent.spec       # PyInstaller standalone executable specification
-├── .github/workflows/      # Cross-platform GitHub Actions CI (Ubuntu + Windows)
-└── pyproject.toml          # uv project configuration & wheel build backend
-```
-
----
-
-## Development & Testing
+Для интеграции с ИИ-агентами (Antigravity CLI `agy_cli`) каждая команда `bridge-cli` поддерживает флаг `--json`:
 
 ```bash
-# Install dependencies
-uv sync --all-extras
-
-# Run full test suite
-LD_PRELOAD="" uv run pytest
-
-# Check code formatting and linter
-uv run ruff check .
-uv run ruff format --check .
-
-# Static type check (strict)
-uv run mypy
+bridge-cli exec "Get-Process -Name BridgeLocalAgent" --json
 ```
+
+- Вывод в `stdout` представляет собой чистый JSON без ANSI-последовательностей оформления.
+- Процесс гарантированно не блокируется на `stdin`.
+- Стандартизированные коды завершения процесса (`ExitCode`):
+  - `0` (`SUCCESS`): Успешное завершение.
+  - `1` (`GENERAL_ERROR`): Ошибка синтаксиса аргументов или внутренняя ошибка.
+  - `2` (`NETWORK_ERROR`): Целевой хост недоступен, соединение отклонено.
+  - `3` (`AUTH_ERROR`): Ошибка PSK-токена, неверная подпись HMAC, replay-атака.
+  - `4` (`COMMAND_FAILED`): Команда PowerShell завершилась с ненулевым кодом.
+  - `5` (`TIMEOUT`): Превышен лимит времени выполнения команды или ответа RPC.
 
 ---
 
-## Documentation Portal & Developer Guides
+## 6. Навигация по документации
 
-Complete documentation for developers, operators, and systems engineers is available in [docs/](docs/README.md):
+Подробная техническая и эксплуатационная документация проекта расположена в каталоге `docs/`:
 
-- [**Developer Onboarding Guide (Step-by-Step for Humans)**](docs/DEV_GUIDE_FOR_HUMANS.md): Plain-language, zero-friction setup, daily CLI workflow, dev-mode logging, and troubleshooting.
-- [**Deployment & Administration Guide**](docs/DEPLOYMENT.md): Windows SCM Service daemon, Windows Defender exclusions, Firewall, and systemd units.
-- [**Architecture & Layer Isolation**](docs/ARCHITECTURE.md): Deep platform architecture, DTO contracts, state machines, and multi-node routing.
-- [**Wire Protocol & RPC Specification**](docs/PROTOCOL_SPEC.md): Binary framing ('BR' header), HMAC-SHA256 envelopes, and complete JSON-RPC 2.0 catalog.
-- [**Configuration Reference (bridge.toml)**](docs/CONFIGURATION.md): Exhaustive breakdown of all settings, resolution cascade, and environment variables.
-- [**CLI & TUI Reference Manual**](docs/CLI_REFERENCE.md): Full command reference for `bridge-cli` and `bridge-agent`, deterministic exit codes, and `--json` format.
-- [**Developer Standards & Contributing**](docs/DEVELOPMENT.md): Testing with loopback, quality gates (ruff/mypy), and adding new RPC handlers.
-
-
-
+- [**docs/MANUAL.md**](docs/MANUAL.md) — Единое руководство оператора и администратора: пошаговая установка с нуля на Windows и Linux, настройка службы SCM, повседневная работа с TUI/CLI и устранение неполадок.
+- [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md) — Архитектурный обзор платформы: модульная изоляция слоев (`bridge_core`, `bridge_agent_win`, `bridge_client_linux`), модели данных, отказоустойчивость.
+- [**docs/CLI_REFERENCE.md**](docs/CLI_REFERENCE.md) — Полный справочник командных интерфейсов: все команды и опции `bridge-cli` и `bridge-agent`, режим `--json`, таблица кодов завершения и раскладка клавиш TUI.
+- [**docs/CONFIGURATION.md**](docs/CONFIGURATION.md) — Справочник конфигурационного файла `bridge.toml`: описание всех секций, значения по умолчанию, правила каскадного поиска и типовые профили.
+- [**docs/PROTOCOL_SPEC.md**](docs/PROTOCOL_SPEC.md) — Спецификация сетевого протокола: 6-байтовый бинарный заголовок фрейма 'BR', конверт безопасности HMAC-SHA256, формат сообщений JSON-RPC 2.0 и коды ошибок.

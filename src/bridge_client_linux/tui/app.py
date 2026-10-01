@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import io
 import select
 import socket
 import sys
@@ -27,6 +28,194 @@ from bridge_client_linux.tui.screens import render_current_mode
 from bridge_client_linux.tui.theme import OFFICIAL_THEME, PaletteTheme
 
 console = Console()
+
+MODES_ORDER = [
+    "SPLASH",
+    "DASH",
+    "POCKET",
+    "NOTES",
+    "EXEC",
+    "CONFIG",
+    "DEV",
+    "CONNECT",
+]
+
+F_KEY_MAP: dict[str, str] = {
+    # F1: SPLASH
+    "\x1bOP": "SPLASH",
+    "\x1b[[A": "SPLASH",
+    "\x1b[11~": "SPLASH",
+    # F2: DASH
+    "\x1bOQ": "DASH",
+    "\x1b[[B": "DASH",
+    "\x1b[12~": "DASH",
+    # F3: POCKET
+    "\x1bOR": "POCKET",
+    "\x1b[[C": "POCKET",
+    "\x1b[13~": "POCKET",
+    # F4: NOTES
+    "\x1bOS": "NOTES",
+    "\x1b[[D": "NOTES",
+    "\x1b[14~": "NOTES",
+    # F5: EXEC
+    "\x1b[15~": "EXEC",
+    # F6: CONFIG
+    "\x1b[17~": "CONFIG",
+    # F7: DEV
+    "\x1b[18~": "DEV",
+    # F8: CONNECT
+    "\x1b[19~": "CONNECT",
+}
+
+NUM_KEY_MAP: dict[str, str] = {
+    "1": "SPLASH",
+    "2": "DASH",
+    "3": "POCKET",
+    "4": "NOTES",
+    "5": "EXEC",
+    "6": "CONFIG",
+    "7": "DEV",
+    "8": "CONNECT",
+}
+
+ALT_NUM_KEY_MAP: dict[str, str] = {
+    "\x1b1": "SPLASH",
+    "\x1b2": "DASH",
+    "\x1b3": "POCKET",
+    "\x1b4": "NOTES",
+    "\x1b5": "EXEC",
+    "\x1b6": "CONFIG",
+    "\x1b7": "DEV",
+    "\x1b8": "CONNECT",
+}
+
+PAGE_SIZES: dict[str, int] = {
+    "POCKET": 10,
+    "NOTES": 6,
+    "EXEC": 4,
+    "DEV": 8,
+}
+
+
+
+def read_terminal_key(stream: Any = sys.stdin, timeout_sec: float = 0.04) -> str:
+    """
+    Надежно считывает один символ или полную escape-последовательность из потока ввода.
+    Исключает обрезание последовательностей и зависания.
+    """
+    ch = str(stream.read(1) or "")
+    if not ch or ch != "\x1b":
+        return ch
+
+    # Проверка наличия продолжения escape-последовательности
+    def _data_ready() -> bool:
+        if hasattr(stream, "fileno"):
+            try:
+                r, _, _ = select.select([stream], [], [], timeout_sec)
+                return bool(r)
+            except (io.UnsupportedOperation, OSError, ValueError):
+                pass
+        if hasattr(stream, "tell") and hasattr(stream, "getvalue"):
+            pos = int(stream.tell())
+            val_len = len(str(stream.getvalue()))
+            return bool(pos < val_len)
+        return False
+
+    if not _data_ready():
+        return "\x1b"
+
+    seq = "\x1b"
+    while _data_ready():
+        next_ch = str(stream.read(1) or "")
+        if not next_ch:
+            break
+        seq += next_ch
+
+        # Alt+1..Alt+8 (например, \x1b1 .. \x1b8)
+        if len(seq) == 2 and seq[1] in "12345678":
+            break
+        # SS3 последовательности (например, \x1bOP для F1)
+        if seq.startswith("\x1bO") and len(seq) >= 3:
+            break
+
+        # Linux console функциональные клавиши \x1b[[A ... \x1b[[D
+        if seq.startswith("\x1b[[") and len(seq) >= 4:
+            break
+        # CSI последовательности, оканчивающиеся на '~' (\x1b[15~, \x1b[5~, etc.)
+        if seq.startswith("\x1b[") and seq.endswith("~"):
+            break
+        # CSI последовательности со стандартным буквенным окончанием (\x1b[A, \x1b[Z, etc.)
+        if (
+            len(seq) >= 3
+            and seq.startswith("\x1b[")
+            and not seq.startswith("\x1b[[")
+            and seq[-1].isalpha()
+        ):
+            break
+        if len(seq) >= 16:
+            break
+
+    return seq
+
+
+def handle_scroll_action(
+    key: str,
+    mode: str,
+    state: dict[str, Any],
+    page_size: int | None = None,
+    total_items: int | None = None,
+) -> bool:
+    """
+    Обрабатывает клавиши навигации по скроллу (Arrow Up/Down, Page Up/Down, Home, End).
+    Обновляет state["scroll_offsets"][mode].
+    Возвращает True, если была обработана клавиша скролла, иначе False.
+    """
+    k = key.lower()
+    is_up = k in ("\x1b[a", "up", "arrow_up")
+    is_down = k in ("\x1b[b", "down", "arrow_down")
+    is_pgup = k in ("\x1b[5~", "page_up", "pageup", "pgup")
+    is_pgdn = k in ("\x1b[6~", "page_down", "pagedown", "pgdn")
+    is_home = k in ("\x1b[h", "\x1b[1~", "home")
+    is_end = k in ("\x1b[f", "\x1b[4~", "end")
+
+    if not (is_up or is_down or is_pgup or is_pgdn or is_home or is_end):
+        return False
+
+    offsets = state.setdefault("scroll_offsets", {})
+    cur_offset = offsets.get(mode, 0)
+    actual_page_size = page_size or PAGE_SIZES.get(mode, 10)
+
+    if total_items is None:
+        if mode == "POCKET":
+            total_items = len(state.get("pocket_files", []))
+        elif mode == "NOTES":
+            total_items = len(state.get("notes_list", []))
+        elif mode == "EXEC":
+            total_items = len(state.get("exec_history", []))
+        elif mode == "DEV":
+            total_items = len(state.get("dev_logs", []))
+        else:
+            total_items = 0
+
+    max_offset = max(0, total_items - actual_page_size) if total_items is not None else 9999
+
+    if is_home:
+        new_offset = 0
+    elif is_end:
+        new_offset = max_offset
+    elif is_up:
+        new_offset = max(0, cur_offset - 1)
+    elif is_down:
+        new_offset = min(max_offset, cur_offset + 1)
+    elif is_pgup:
+        new_offset = max(0, cur_offset - actual_page_size)
+    elif is_pgdn:
+        new_offset = min(max_offset, cur_offset + actual_page_size)
+    else:
+        new_offset = cur_offset
+
+    offsets[mode] = new_offset
+    return True
 
 
 def probe_target_socket(host: str, port: int, timeout_sec: float = 0.5) -> tuple[bool, float]:
@@ -60,55 +249,83 @@ def handle_key_action(key: str, current_mode: str) -> tuple[str, bool]:
     """
     Обрабатывает нажатую клавишу и возвращает кортеж:
       (новый_режим, продолжать_ли_цикл)
+
+    Внимание: Буквенные клавиши ('w', 'q', 'r', 'c', 'a' и т.д.) НЕ переключают режимы
+    и НЕ вызывают выход из программы!
     """
     k = key.lower()
-    # Выход из приложения
-    if k in ("q", "\x03", "quit", "exit"):
+
+    # 1. Выход: только Ctrl+C (\x03), Ctrl+Q (\x11) и строковые команды
+    if key in ("\x03", "\x11") or k in ("quit", "exit", ":q", ":quit"):
         return current_mode, False
 
-    # Именованные режимы
-    if k in ("w", "welcome", "splash"):
+    # 2. Прямая адресация по цифрам 1..8
+    if key in NUM_KEY_MAP:
+        return NUM_KEY_MAP[key], True
+
+    # 3. Alt+1..Alt+8
+    if key in ALT_NUM_KEY_MAP:
+        return ALT_NUM_KEY_MAP[key], True
+
+    # 4. Функциональные клавиши F1..F8 (fallback)
+    if key in F_KEY_MAP:
+        return F_KEY_MAP[key], True
+
+    f_map_str = {
+        "f1": "SPLASH",
+        "f2": "DASH",
+        "f3": "POCKET",
+        "f4": "NOTES",
+        "f5": "EXEC",
+        "f6": "CONFIG",
+        "f7": "DEV",
+        "f8": "CONNECT",
+    }
+    if k in f_map_str:
+        return f_map_str[k], True
+
+    # 5. Стрелки Влево (←) и Вправо (→) / скобки [ / ]
+    order = MODES_ORDER
+    norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+    cur_idx = order.index(norm_mode) if norm_mode in order else 1
+
+    if key in ("\x1b[D", "\x1b[1;5D", "\x1b[1;3D", "\x1bOD", "left", "left_arrow", "["):
+        prev = order[(cur_idx - 1) % len(order)]
+        return prev, True
+
+    if key in ("\x1b[C", "\x1b[1;5C", "\x1b[1;3C", "\x1bOC", "right", "right_arrow", "]"):
+        nxt = order[(cur_idx + 1) % len(order)]
+        return nxt, True
+
+    # 6. Полные имена режимов и двоеточия
+    if k in ("welcome", "splash", ":1", ":w", ":welcome", ":splash"):
         return "SPLASH", True
-    if k in ("dash",):
+    if k in ("dash", ":2", ":dash"):
         return "DASH", True
-    if k in ("pocket",):
+    if k in ("pocket", ":3", ":pocket"):
         return "POCKET", True
-    if k in ("notes",):
+    if k in ("notes", ":4", ":notes"):
         return "NOTES", True
-    if k in ("exec",):
+    if k in ("exec", ":5", ":exec"):
         return "EXEC", True
-    if k in ("config",):
+    if k in ("config", ":6", ":config", ":cfg"):
         return "CONFIG", True
-    if k in ("dev", "logs"):
+    if k in ("dev", "logs", ":7", ":dev"):
         return "DEV", True
-    if k in ("connect", "setup", "c"):
+    if k in ("connect", "setup", ":8", ":connect", ":setup", ":conn"):
         return "CONNECT", True
 
-    # Демонстрация анимаций
-    if k in ("a", "anim"):
-        return "ANIM", True
-
-    # Обновление связи
-    if k in ("r", "refresh"):
-        return current_mode, True
-
-    # Tab / Shift+Tab — циклическое переключение вкладок
-    order = ["SPLASH", "DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]
+    # 7. Tab / Shift+Tab — циклическое переключение вкладок
     if k in ("\t", "tab"):
-        norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
-        if norm_mode in order:
-            nxt = order[(order.index(norm_mode) + 1) % len(order)]
-            return nxt, True
-        return "SPLASH", True
+        nxt = order[(cur_idx + 1) % len(order)]
+        return nxt, True
 
-    if k in ("\x1b[z", "\x1b[z", "shift+tab"):
-        norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
-        if norm_mode in order:
-            prev = order[(order.index(norm_mode) - 1) % len(order)]
-            return prev, True
-        return "CONNECT", True
+    if k in ("\x1b[z", "\x1b[Z", "shift+tab"):
+        prev = order[(cur_idx - 1) % len(order)]
+        return prev, True
 
     return current_mode, True
+
 
 
 def dispatch_tui_action(
@@ -368,6 +585,7 @@ def run_interactive_tui(
     state.setdefault("exec_history", [])
     state.setdefault("pocket_files", [])
     state.setdefault("notes_list", [])
+    state.setdefault("scroll_offsets", {"POCKET": 0, "NOTES": 0, "DEV": 0, "EXEC": 0})
     state.setdefault("input_buffer", "")
     state.setdefault("status_msg", "")
 
@@ -398,7 +616,7 @@ def run_interactive_tui(
         if not is_online and not state.get("status_msg"):
             state["status_msg"] = (
                 f"[bold red][ОФФЛАЙН] Windows-агент не запущен на {tgt_host}:{tgt_port}. "
-                f"Нажмите [R] для повторной проверки связи.[/]"
+                f"Нажмите [Enter] на вкладке CONNECT для повторной проверки связи.[/]"
             )
         elif is_online and not state.get("status_msg"):
             state["status_msg"] = (
@@ -436,48 +654,104 @@ def run_interactive_tui(
             # Минималистичная подсказка управления внизу
             console.print(
                 f"\n [dim]Навигация:[/] "
-                f"[bold {theme.blue}][Tab][/] Вкладки  "
-                f"[bold {theme.amber}][Enter][/] Ввод  "
-                f"[bold {theme.green}][R][/] Проверить связь  "
-                f"[bold {theme.red}][Ctrl+C/Q][/] Выход"
+                f"[bold {theme.blue}][← / → / 1..8 / Tab][/] Вкладки  "
+                f"[bold {theme.amber}][↑/↓ / PgUp/PgDn][/] Скролл  "
+                f"[bold {theme.green}][Enter][/] Ввод  "
+                f"[bold {theme.red}][Ctrl+C / Ctrl+Q][/] Выход"
             )
 
-            # Чтение клавиши с поддержкой escape-последовательностей
-            ch = sys.stdin.read(1)
-            if ch == "\x1b":
-                r, _, _ = select.select([sys.stdin], [], [], 0.05)
-                if r:
-                    ch += sys.stdin.read(1)
-                    r, _, _ = select.select([sys.stdin], [], [], 0.05)
-                    if r:
-                        ch += sys.stdin.read(3)
+            # Чтение клавиши с надежной поддержкой escape-последовательностей
+            ch = read_terminal_key(sys.stdin)
 
             # 1. Завершение работы
             if ch in ("\x03", "\x11"):  # Ctrl+C, Ctrl+Q
                 break
 
-            # 2. Tab / Shift+Tab переключение вкладок
-            order = ["SPLASH", "DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT"]
+            # 2. Переключение вкладок стрелками Влево (←) и Вправо (→)
+            is_left = ch in ("\x1b[D", "\x1b[1;5D", "\x1b[1;3D", "\x1bOD")
+            if is_left and (not input_buffer or ch in ("\x1b[1;5D", "\x1b[1;3D")):
+                norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+                if norm_mode in MODES_ORDER:
+                    idx = MODES_ORDER.index(norm_mode)
+                    current_mode = MODES_ORDER[(idx - 1) % len(MODES_ORDER)]
+                else:
+                    current_mode = "DASH"
+                input_buffer = ""
+                continue
+
+            is_right = ch in ("\x1b[C", "\x1b[1;5C", "\x1b[1;3C", "\x1bOC")
+            if is_right and (not input_buffer or ch in ("\x1b[1;5C", "\x1b[1;3C")):
+                norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+                if norm_mode in MODES_ORDER:
+                    idx = MODES_ORDER.index(norm_mode)
+                    current_mode = MODES_ORDER[(idx + 1) % len(MODES_ORDER)]
+                else:
+                    current_mode = "DASH"
+                input_buffer = ""
+                continue
+
+            # 3. Tab / Shift+Tab переключение вкладок
             if ch == "\t":
                 norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
-                if norm_mode in order:
-                    idx = order.index(norm_mode)
-                    current_mode = order[(idx + 1) % len(order)]
+                if norm_mode in MODES_ORDER:
+                    idx = MODES_ORDER.index(norm_mode)
+                    current_mode = MODES_ORDER[(idx + 1) % len(MODES_ORDER)]
                 else:
                     current_mode = "DASH"
                 input_buffer = ""
                 continue
             if ch in ("\x1b[z", "\x1b[Z"):  # Shift+Tab
                 norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
-                if norm_mode in order:
-                    idx = order.index(norm_mode)
-                    current_mode = order[(idx - 1) % len(order)]
+                if norm_mode in MODES_ORDER:
+                    idx = MODES_ORDER.index(norm_mode)
+                    current_mode = MODES_ORDER[(idx - 1) % len(MODES_ORDER)]
                 else:
                     current_mode = "DASH"
                 input_buffer = ""
                 continue
 
-            # 3. Escape: очистить буфер ввода или вернуться на DASH
+            # 4. Цифровые клавиши 1..8, Alt+1..8 и скобки [ / ]
+            if ch in ALT_NUM_KEY_MAP:
+                current_mode = ALT_NUM_KEY_MAP[ch]
+                input_buffer = ""
+                continue
+
+            if current_mode in ("SPLASH", "DASH", "CONFIG", "DEV", "WELCOME"):
+                if ch in NUM_KEY_MAP:
+                    current_mode = NUM_KEY_MAP[ch]
+                    input_buffer = ""
+                    continue
+                if ch == "[":
+                    norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+                    idx = MODES_ORDER.index(norm_mode) if norm_mode in MODES_ORDER else 1
+                    current_mode = MODES_ORDER[(idx - 1) % len(MODES_ORDER)]
+                    input_buffer = ""
+                    continue
+                if ch == "]":
+                    norm_mode = "SPLASH" if current_mode == "WELCOME" else current_mode
+                    idx = MODES_ORDER.index(norm_mode) if norm_mode in MODES_ORDER else 1
+                    current_mode = MODES_ORDER[(idx + 1) % len(MODES_ORDER)]
+                    input_buffer = ""
+                    continue
+
+            is_prompt_mode = current_mode in ("POCKET", "NOTES", "EXEC")
+            if is_prompt_mode and not input_buffer and ch in NUM_KEY_MAP:
+                current_mode = NUM_KEY_MAP[ch]
+                input_buffer = ""
+                continue
+
+
+            # 5. Переключение вкладок по F1..F8 (fallback)
+            if ch in F_KEY_MAP:
+                current_mode = F_KEY_MAP[ch]
+                input_buffer = ""
+                continue
+
+            # 6. Навигация и скролл (Arrow Up/Down, Page Up/Down, Home, End)
+            if handle_scroll_action(ch, current_mode, state):
+                continue
+
+            # 7. Escape: очистить буфер ввода или вернуться на DASH
             if ch == "\x1b":
                 if input_buffer:
                     input_buffer = ""
@@ -486,33 +760,33 @@ def run_interactive_tui(
                     current_mode = "DASH"
                 continue
 
-            # 4. Backspace
+            # 8. Backspace
             if ch in ("\x7f", "\x08"):
                 input_buffer = input_buffer[:-1]
                 continue
 
-            # 5. Enter: отправка команды или текста
+            # 9. Enter: отправка команды или текста
             if ch in ("\r", "\n"):
                 stripped = input_buffer.strip()
                 if stripped in (":q", ":quit", "quit", "exit"):
                     break
-                if stripped in (":w", ":welcome", ":splash"):
+                if stripped in (":1", ":w", ":welcome", ":splash"):
                     current_mode = "SPLASH"
-                elif stripped in (":1", ":dash"):
+                elif stripped in (":2", ":dash"):
                     current_mode = "DASH"
-                elif stripped in (":2", ":pocket"):
+                elif stripped in (":3", ":pocket"):
                     current_mode = "POCKET"
-                elif stripped in (":3", ":notes"):
+                elif stripped in (":4", ":notes"):
                     current_mode = "NOTES"
-                elif stripped in (":4", ":exec"):
+                elif stripped in (":5", ":exec"):
                     current_mode = "EXEC"
-                elif stripped in (":5", ":config"):
+                elif stripped in (":6", ":config", ":cfg"):
                     current_mode = "CONFIG"
-                elif stripped in (":6", ":dev"):
+                elif stripped in (":7", ":dev"):
                     current_mode = "DEV"
-                elif stripped in (":7", ":connect", ":setup", ":c"):
+                elif stripped in (":8", ":connect", ":setup", ":conn"):
                     current_mode = "CONNECT"
-                elif stripped in (":r", ":refresh", "refresh", "r"):
+                elif stripped in (":r", ":refresh", "refresh"):
                     h = state.get("tgt_host", tgt_host)
                     p = int(state.get("tgt_port", tgt_port))
                     is_online, latency = probe_target_socket(h, p, timeout_sec=0.5)
@@ -523,6 +797,7 @@ def run_interactive_tui(
                             f"[bold green][ОНЛАЙН] Агент доступен на "
                             f"{h}:{p} (пинг {latency:.2f} мс)[/]"
                         )
+
                     else:
                         state["status_msg"] = f"[bold red][ОФФЛАЙН] Узел {h}:{p} не отвечает.[/]"
                 elif not stripped and current_mode in ("CONNECT", "SETUP"):
@@ -532,33 +807,7 @@ def run_interactive_tui(
                 input_buffer = ""
                 continue
 
-            # 6. Быстрые клавиши на экранах без активного ввода (R, W, Q)
-            if (
-                current_mode in ("DASH", "WELCOME", "SPLASH", "CONFIG", "DEV")
-                and not input_buffer
-                and ch.lower() in ("r", "q", "w")
-            ):
-                if ch.lower() == "r":
-                    h = state.get("tgt_host", tgt_host)
-                    p = int(state.get("tgt_port", tgt_port))
-                    is_online, latency = probe_target_socket(h, p, timeout_sec=0.5)
-                    state["is_online"] = is_online
-                    state["latency_ms"] = latency if is_online else None
-                    if is_online:
-                        state["status_msg"] = (
-                            f"[bold green][ОНЛАЙН] Агент доступен на "
-                            f"{h}:{p} (пинг {latency:.2f} мс)[/]"
-                        )
-                    else:
-                        state["status_msg"] = f"[bold red][ОФФЛАЙН] Узел {h}:{p} не отвечает.[/]"
-                    continue
-                new_mode, keep_going = handle_key_action(ch, current_mode)
-                if not keep_going:
-                    break
-                current_mode = new_mode
-                continue
-
-            # 8. Печатные символы -> в буфер ввода
+            # 8. Печатные символы -> в буфер ввода (буквы никогда не переключают экраны)
             if len(ch) == 1 and ord(ch) >= 32:
                 input_buffer += ch
     finally:

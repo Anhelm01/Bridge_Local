@@ -15,6 +15,15 @@ import contextlib
 import sys
 from pathlib import Path
 
+# Принудительная настройка UTF-8 вывода для Windows-консоли
+if sys.platform == "win32":
+    with contextlib.suppress(Exception):
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 from bridge_agent_win.context_menu import (
     drop_file_to_pocket,
     install_context_menu,
@@ -175,7 +184,7 @@ def main() -> None:
             pass
 
     if not args or args[0] in ("-h", "--help", "help"):
-        print("bridge-agent — Windows Agent Management CLI")
+        print("bridge-agent - Windows Agent Management CLI")
         print("\nКоманды:")
         print("  setup                   Мастер быстрой настройки (IP, порт, токен)")
         print("  config [show|opts]      Просмотр и изменение сетевых параметров")

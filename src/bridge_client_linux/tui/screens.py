@@ -241,28 +241,30 @@ def get_live_context(custom_data: dict[str, Any] | None = None) -> dict[str, Any
 
 
 def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> None:
-    """Верхний таб-бар переключения режимов с поддержкой навигации по Tab."""
-    modes = [
-        "SPLASH",
-        "DASH",
-        "POCKET",
-        "NOTES",
-        "EXEC",
-        "CONFIG",
-        "DEV",
-        "CONNECT",
+    """Верхний таб-бар переключения режимов с поддержкой адресации по 1..8, стрелкам ← / → и Tab."""
+    tabs = [
+        ("1", "SPLASH"),
+        ("2", "DASH"),
+        ("3", "POCKET"),
+        ("4", "NOTES"),
+        ("5", "EXEC"),
+        ("6", "CONFIG"),
+        ("7", "DEV"),
+        ("8", "CONNECT"),
     ]
     bar = Text()
     bar.append("[BRIDGE] ", style=f"bold black on {theme.blue}")
-    for i, name in enumerate(modes):
-        if name == active_mode or (name == "SPLASH" and active_mode == "WELCOME"):
-            bar.append(f"█ [{name}]", style="bold white on #1F6FEB")
+    for i, (num_key, name) in enumerate(tabs):
+        is_active = (name == active_mode) or (name == "SPLASH" and active_mode == "WELCOME")
+        if is_active:
+            bar.append(f"█ [{num_key}:{name}]", style="bold white on #1F6FEB")
         else:
-            bar.append(f"[{name}]", style=f"dim {theme.secondary}")
-        if i < len(modes) - 1:
+            bar.append(f"[{num_key}:{name}]", style=f"dim {theme.secondary}")
+        if i < len(tabs) - 1:
             bar.append(" │ ")
-    bar.append("  [dim](Навигация: Tab / Shift+Tab)[/]")
+    bar.append("  [dim](← / → / 1..8 / Tab)[/]")
     console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
+
 
 
 def render_welcome_screen(
@@ -513,7 +515,11 @@ def render_dashboard_mode(
     console.print(
         Panel(
             prompt_bar,
-            title=("[dim][Tab] Вкладки | :send <f> | :exec <cmd> | :r Обновить | :q Выход[/dim]"),
+            title=(
+                "[dim]←/→ или 1..8: Табы | :send <f> | :exec <cmd> | :r Обновить | :q Выход[/dim]"
+            ),
+
+
             border_style=theme.blue if input_buf else theme.secondary,
             padding=0,
         )
@@ -546,13 +552,37 @@ def render_pocket_mode(
     table.add_column("Активность / Статус")
 
     if files:
-        for f in files:
+        page_size = 10
+        offsets = (
+            pocket_data.setdefault("scroll_offsets", {})
+            if isinstance(pocket_data, dict)
+            else {}
+        )
+        max_offset = max(0, len(files) - page_size)
+        offset = max(0, min(offsets.get("POCKET", 0), max_offset))
+        offsets["POCKET"] = offset
+        visible_files = files[offset : offset + page_size]
+        hidden_below = max(0, len(files) - (offset + page_size))
+
+        if offset > 0:
+            table.add_row(f"[dim]▲ (скрыто: {offset} выше)[/]", "", "", "", "")
+
+        for f in visible_files:
             table.add_row(
                 f.get("name", "file"),
                 f.get("size", "0 B"),
                 f.get("direction", "LOCAL [POCKET]"),
                 f.get("sha", "[OK]"),
                 f"[bold {theme.green}]{f.get('status', 'READY')}[/]",
+            )
+
+        if hidden_below > 0:
+            table.add_row(
+                f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]",
+                "",
+                "",
+                "",
+                "",
             )
     else:
         table.add_row(
@@ -573,7 +603,7 @@ def render_pocket_mode(
     panel = Panel(
         prompt_text,
         title=f"[bold {theme.primary}][ ПРЯМАЯ ОТПРАВКА В КАРМАН / DIRECT FILE DROP ][/]",
-        subtitle="[dim]Путь к файлу или перетащите мышкой ──► [Enter] Отправить на Windows[/dim]",
+        subtitle="[dim]Файл ──► [Enter] Отправить на Windows | [↑/↓, PgUp/PgDn] Скролл[/dim]",
         border_style=theme.amber if input_buf else theme.secondary,
         padding=(0, 1),
     )
@@ -601,11 +631,31 @@ def render_notes_mode(
 
     feed_lines = []
     if notes_list:
-        for n in notes_list[-6:]:
+        page_size = 6
+        offsets = (
+            notes_data.setdefault("scroll_offsets", {})
+            if isinstance(notes_data, dict)
+            else {}
+        )
+        max_offset = max(0, len(notes_list) - page_size)
+        offset = max(0, min(offsets.get("NOTES", 0), max_offset))
+        offsets["NOTES"] = offset
+        visible_notes = notes_list[offset : offset + page_size]
+        hidden_below = max(0, len(notes_list) - (offset + page_size))
+
+        if offset > 0:
+            feed_lines.append(f"[dim]▲ (скрыто: {offset} выше)[/]")
+
+        for n in visible_notes:
             t = n.get("time", "12:00:00")
             author = n.get("author", "NODE")
             text = n.get("text", "")
             feed_lines.append(f"[bold {theme.purple}][{t}] {author}:[/]\n  {text}\n")
+
+        if hidden_below > 0:
+            feed_lines.append(
+                f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]"
+            )
     else:
         feed_lines.append(
             "[dim italic]Журнал заметок пуст. Введите текст в поле NOTE > для отправки.[/]\n"
@@ -615,7 +665,7 @@ def render_notes_mode(
         "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
     )
     feed_lines.append(
-        "[bold white]Ввод заметки ([Enter] Отправить на все узлы | [Tab] Навигация):[/]"
+        "[bold white]Ввод заметки ([Enter] Отправить на все узлы | [←/→/Tab] Навигация):[/]"
     )
     feed_lines.append(f"[bold {theme.blue}]NOTE > [/][bold white]{input_buf}[/][blink]█[/]")
     if status_msg:
@@ -636,9 +686,10 @@ def render_notes_mode(
 
 [bold {theme.blue}]УПРАВЛЕНИЕ:[/][dim]
  [Enter] Отправить заметку
- [Tab] Сменить вкладку
- [Shift+Tab] Предыдущая вкладка
+ [← / → / 1..8 / Tab] Навигация
+ [↑/↓, PgUp/PgDn] Скролл
  [Ctrl+C] Выход[/dim]""",
+
         title="[bold white][ ИНФО / СТАТИСТИКА ][/]",
         border_style=theme.secondary,
     )
@@ -676,12 +727,32 @@ def render_exec_mode(
     ]
 
     if history:
-        for cmd, output, code in history[-4:]:
+        page_size = 4
+        offsets = (
+            exec_data.setdefault("scroll_offsets", {})
+            if isinstance(exec_data, dict)
+            else {}
+        )
+        max_offset = max(0, len(history) - page_size)
+        offset = max(0, min(offsets.get("EXEC", 0), max_offset))
+        offsets["EXEC"] = offset
+        visible_history = history[offset : offset + page_size]
+        hidden_below = max(0, len(history) - (offset + page_size))
+
+        if offset > 0:
+            lines.append(f"[dim]▲ (скрыто: {offset} выше)[/]")
+
+        for cmd, output, code in visible_history:
             lines.append(f"[bold {theme.purple}]PS C:\\BridgeService> [/][bold white]{cmd}[/]")
             if output:
                 lines.append(output.strip())
             color = theme.green if code == 0 else theme.red
             lines.append(f"[dim](Код завершения: [bold {color}]{code}[/])[/dim]\n")
+
+        if hidden_below > 0:
+            lines.append(
+                f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]"
+            )
     else:
         if not ctx["is_online"]:
             lines.append(
@@ -700,8 +771,9 @@ def render_exec_mode(
         "[dim]─────────────────────────────────────────────────────────────────────────────[/]"
     )
     lines.append(
-        "[bold white]Ввод команды ([Enter] Выполнить | [Tab] Навигация | [Ctrl+C] Выход):[/]"
+        "[bold white]Ввод команды ([Enter] Выполнить | [←/→/Tab] Навигация | [Ctrl+C] Выход):[/]"
     )
+
     lines.append(
         f"[bold {theme.blue}]PS C:\\BridgeService> [/][bold white]{input_buf}[/][blink]█[/]"
     )
@@ -787,8 +859,7 @@ def render_dev_mode(
     hb_iv = ctx["cfg"].heartbeat.interval_sec
     hb_ff = ctx["failfast_ms"]
 
-    lines = [
-        "[bold white]СИСТЕМНАЯ ДИАГНОСТИКА И СТАТУС ПОДСИСТЕМ BRIDGE LOCAL[/]",
+    base_items = [
         f"[bold {b}][CONFIG][/]  Узел: {ctx['src_node']} (цель: {ctx['tgt_address']})",
         f"[bold {p}][AUTH][/]    HMAC-SHA256: {auth_lbl}",
         f"[bold {b}][NET][/]     Сокет: {net_diag}",
@@ -796,12 +867,51 @@ def render_dev_mode(
         f"[bold {p}][NOTES][/]   Журнал: {ctx['notes_file_display']} ({ctx['notes_count']} шт.)",
         f"[bold {b}][EXEC][/]    PowerShell: UTF-8 chcp 65001, timeout={ex_tout}s",
         f"[bold {g}][HEART][/]   Интервал: {hb_iv}s, fail-fast: {hb_ff}ms",
-        "[dim]───────────────────────────────────────────────────────────────────[/]",
-        "[bold white]Управление: [R] Перепроверить связь | [Tab] Вкладки | [Q] Выход[/]",
+        f"[bold {b}][WIRE][/]    Wire framing: 4-byte length prefix (max 64MB)",
+        f"[bold {g}][RPC][/]     JSON-RPC 2.0 Dispatcher: active methods=8",
+        f"[bold {a}][SYNC][/]    Watchdog pocket sync: active debounce 100ms",
+        f"[bold {p}][STREAM][/]  Duplex packet streaming: ready",
     ]
 
+    custom_logs = (
+        list(logs_data.get("dev_logs", []))
+        if isinstance(logs_data, dict) and logs_data.get("dev_logs")
+        else []
+    )
+    all_dev_items = base_items + custom_logs
+
+    page_size = 8
+    offsets = (
+        logs_data.setdefault("scroll_offsets", {})
+        if isinstance(logs_data, dict)
+        else {}
+    )
+    max_offset = max(0, len(all_dev_items) - page_size)
+    offset = max(0, min(offsets.get("DEV", 0), max_offset))
+    offsets["DEV"] = offset
+    visible_items = all_dev_items[offset : offset + page_size]
+    hidden_below = max(0, len(all_dev_items) - (offset + page_size))
+
+    feed_lines = ["[bold white]СИСТЕМНАЯ ДИАГНОСТИКА И СТАТУС ПОДСИСТЕМ BRIDGE LOCAL[/]"]
+    if offset > 0:
+        feed_lines.append(f"[dim]▲ (скрыто: {offset} выше)[/]")
+
+    feed_lines.extend(visible_items)
+
+    if hidden_below > 0:
+        feed_lines.append(
+            f"[dim]▼ (скрыто: {hidden_below} ниже, навигация: ↑/↓, PgUp/PgDn)[/]"
+        )
+
+    feed_lines.append("[dim]───────────────────────────────────────────────────────────────────[/]")
+    feed_lines.append(
+        "[bold white]Управление: [←/→/1..8] Табы | [↑/↓, PgUp/PgDn] Скролл | [Ctrl+C] Выход[/]"
+    )
+
+
+
     logs_feed = Panel(
-        "\n".join(lines),
+        "\n".join(feed_lines),
         title="[bold white][ ДИАГНОСТИЧЕСКАЯ ТРАССИРОВКА / HYPER-LOGGING STREAM ][/]",
         border_style=theme.blue,
     )
@@ -815,11 +925,10 @@ def render_dev_mode(
 +- Карман: [bold white]{ctx["pocket_count"]} файлов[/]
 
 [bold {theme.blue}]ПОДСИСТЕМЫ:[/][dim]
- [W] Wire Protocol
- [R] JSON-RPC
- [F] Pocket Watchdog
- [P] PowerShell Runner
- [H] Heartbeat Probe[/dim]""",
+ [F1] SPLASH  [F2] DASH
+ [F3] POCKET  [F4] NOTES
+ [F5] EXEC    [F6] CONFIG
+ [F7] DEV     [F8] CONNECT[/dim]""",
         title="[bold white][ СТАТУС DEV-MODE ][/]",
         border_style=theme.secondary,
     )

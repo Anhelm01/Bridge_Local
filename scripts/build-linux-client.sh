@@ -31,8 +31,10 @@ if [[ -f "dist/bridge-cli" ]]; then
 
     cp "dist/bridge-cli" "${LINUX_PKG_DIR}/"
     cp "bridge.toml" "${LINUX_PKG_DIR}/"
-    if [[ -f "docs/README_LINUX.md" ]]; then
-        cp "docs/README_LINUX.md" "${LINUX_PKG_DIR}/README.md"
+    if [[ -f "docs/MANUAL.md" ]]; then
+        cp "docs/MANUAL.md" "${LINUX_PKG_DIR}/README.md"
+    elif [[ -f "README.md" ]]; then
+        cp "README.md" "${LINUX_PKG_DIR}/README.md"
     fi
     if [[ -d "scripts/systemd" ]]; then
         cp scripts/systemd/* "${LINUX_PKG_DIR}/systemd/"
