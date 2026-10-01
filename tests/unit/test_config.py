@@ -210,3 +210,19 @@ port = 7777
         assert cfg.connection.host == "0.0.0.0"  # default
         assert cfg.heartbeat.interval_sec == 2.0  # default
         assert cfg.pocket.path == "./pocket"  # default
+
+    def test_update_connection_method(self, tmp_path: Path) -> None:
+        """Проверяет метод update_connection с автосохранением."""
+        config_file = tmp_path / "bridge.toml"
+        cfg = BridgeConfig.load(config_file)
+        cfg.update_connection(
+            host="192.168.1.150",
+            port=9740,
+            psk_token="secret_key_123",
+            save=True,
+        )
+
+        reloaded = BridgeConfig.load(config_file)
+        assert reloaded.connection.host == "192.168.1.150"
+        assert reloaded.connection.port == 9740
+        assert reloaded.connection.psk_token == "secret_key_123"

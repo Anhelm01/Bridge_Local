@@ -94,7 +94,18 @@ def test_render_all_screens_without_exceptions():
     demo_process_animations(OFFICIAL_THEME)
 
     # Диспетчер render_current_mode для каждого ключа
-    for mode in ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "WELCOME", "ANIM", "UNKNOWN"]:
+    test_modes = [
+        "DASH",
+        "POCKET",
+        "NOTES",
+        "EXEC",
+        "CONFIG",
+        "DEV",
+        "WELCOME",
+        "ANIM",
+        "UNKNOWN",
+    ]
+    for mode in test_modes:
         render_current_mode(mode, OFFICIAL_THEME)
 
 

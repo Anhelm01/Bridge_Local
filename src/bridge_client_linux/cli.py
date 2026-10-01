@@ -737,6 +737,183 @@ def cmd_config_show(
     )
 
 
+@config_app.command("set")
+def cmd_config_set(
+    host: str | None = typer.Option(None, "--host", "-h", help="IP-адрес или hostname узла"),
+    port: int | None = typer.Option(None, "--port", "-p", help="TCP порт"),
+    token: str | None = typer.Option(None, "--token", "-t", help="Ключ безопасности PSK"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
+    json_mode: bool = typer.Option(False, "--json", "-j", help="Машиночитаемый вывод JSON"),
+) -> None:
+    """Установка сетевых параметров в bridge.toml через CLI."""
+    if host is None and port is None and token is None:
+        console.print("[bold red]Укажите хотя бы один параметр: --host, --port или --token[/]")
+        raise typer.Exit(code=ExitCode.GENERAL_ERROR)
+
+    cfg = BridgeConfig.load(config)
+    cfg.update_connection(host=host, port=port, psk_token=token, save=True)
+
+    if json_mode:
+        _output_json(
+            {
+                "status": "success",
+                "host": cfg.connection.host,
+                "port": cfg.connection.port,
+                "psk_set": bool(cfg.connection.psk_token),
+                "config_path": str(cfg._config_path or "bridge.toml"),
+            }
+        )
+        return
+
+    console.print(f"[bold green][OK] Параметры сохранены в {cfg._config_path or 'bridge.toml'}[/]")
+    console.print(f"  Хост: [bold white]{cfg.connection.host}[/]")
+    console.print(f"  Порт: [bold white]{cfg.connection.port}[/]")
+
+
+@app.command("connect")
+def cmd_connect(
+    target: str = typer.Argument(
+        ...,
+        help="Адрес целевого узла Windows (например: 192.168.1.150:9732 или 192.168.1.150)",
+    ),
+    token: str | None = typer.Option(
+        None,
+        "--token",
+        "-t",
+        help="PSK токен аутентификации (опционально)",
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Путь к файлу конфигурации bridge.toml",
+    ),
+    json_mode: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Машиночитаемый вывод JSON",
+    ),
+) -> None:
+    """Быстрое подключение и сохранение адреса узла без ручного редактирования TOML."""
+    from bridge_client_linux.tui.app import probe_target_socket
+
+    raw_target = target.replace("http://", "").replace("https://", "").strip()
+    cfg = BridgeConfig.load(config)
+    cur_host = cfg.connection.host
+    cur_port = cfg.connection.port
+
+    new_host = cur_host
+    new_port = cur_port
+
+    if raw_target.startswith(":"):
+        with contextlib.suppress(ValueError):
+            new_port = int(raw_target[1:].strip())
+    elif ":" in raw_target:
+        parts = raw_target.split(":", 1)
+        new_host = parts[0].strip()
+        with contextlib.suppress(ValueError):
+            new_port = int(parts[1].strip())
+    else:
+        new_host = raw_target
+
+    cfg.update_connection(host=new_host, port=new_port, psk_token=token, save=True)
+    is_online, latency = probe_target_socket(new_host, new_port, timeout_sec=0.4)
+
+    if json_mode:
+        _output_json(
+            {
+                "status": "success",
+                "host": new_host,
+                "port": new_port,
+                "is_online": is_online,
+                "latency_ms": latency if is_online else None,
+                "config_path": str(cfg._config_path or "bridge.toml"),
+            }
+        )
+        return
+
+    status_str = (
+        f"[bold green]ONLINE[/] (пинг {latency:.2f} мс)"
+        if is_online
+        else "[bold red]OFFLINE[/] (узел не отвечает, проверьте запуск службы)"
+    )
+    console.print(
+        Panel(
+            f"[bold white]Настройки подключения успешно обновлены![/]\n\n"
+            f"  • [bold cyan]Целевой хост:[/]"
+            f"   [bold white]{new_host}[/]\n"
+            f"  • [bold magenta]Порт:[/]"
+            f"           [bold white]{new_port}[/]\n"
+            f"  • [bold yellow]Статус сокета:[/]"
+            f"  {status_str}\n"
+            f"  • [dim]Конфигурация:[/]  [dim]{cfg._config_path or 'bridge.toml'}[/]\n\n"
+            f"[dim]Для запуска мониторинга введите: bridge tui[/]",
+            title="[bold green]BRIDGE LOCAL: ПОДКЛЮЧЕНИЕ НАСТРОЕНО[/]",
+            border_style=OFFICIAL_THEME.green if is_online else OFFICIAL_THEME.amber,
+        )
+    )
+
+
+@app.command("setup")
+def cmd_setup(
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Путь к файлу конфигурации bridge.toml",
+    ),
+) -> None:
+    """Интерактивный мастер первоначальной настройки подключения без ручной правки TOML."""
+    from bridge_client_linux.tui.app import probe_target_socket
+
+    console.print("[bold cyan]════════════════════════════════════════════════════════════[/]")
+    console.print("[bold white]  Bridge Local (Linux Client) — Мастер настройки подключения[/]")
+    console.print("[bold cyan]════════════════════════════════════════════════════════════[/]\n")
+
+    cfg = BridgeConfig.load(config)
+    cur_host = cfg.connection.host
+    cur_port = cfg.connection.port
+    cur_token = cfg.connection.psk_token or ""
+
+    console.print(f"[dim]Текущие параметры ({cfg._config_path or 'bridge.toml'}):[/]")
+    console.print(f"  Хост: [bold white]{cur_host}[/]")
+    console.print(f"  Порт: [bold white]{cur_port}[/]")
+    token_display = f"{cur_token[:8]}..." if cur_token else "(отключен)"
+    console.print(f"  Токен: [bold white]{token_display}[/]")
+    console.print("")
+
+    val_host = typer.prompt(
+        "1. Введите IP-адрес или Hostname Windows-машины",
+        default=cur_host,
+    ).strip()
+
+    val_port = typer.prompt(
+        "2. Введите TCP-порт",
+        default=str(cur_port),
+    ).strip()
+
+    val_token = typer.prompt(
+        "3. Введите PSK-токен (Enter для сохранения текущего)",
+        default=cur_token,
+        show_default=False,
+    ).strip()
+
+    port_int = int(val_port) if val_port.isdigit() else cur_port
+    cfg.update_connection(host=val_host, port=port_int, psk_token=val_token, save=True)
+
+    is_online, latency = probe_target_socket(val_host, port_int, timeout_sec=0.4)
+    status_str = (
+        f"[bold green]ONLINE[/] (пинг {latency:.2f} мс)"
+        if is_online
+        else "[bold red]OFFLINE[/] (узел не отвечает)"
+    )
+
+    console.print("\n[bold green][OK] Настройки успешно сохранены![/]")
+    console.print(f"Цель: [bold white]{val_host}:{port_int}[/] — {status_str}")
+    console.print("[dim]Запустите 'bridge tui' для перехода в оперативный интерфейс.[/]")
+
+
 def run() -> None:
     """Точка запуска CLI через sys.argv."""
     # Защита от перехвата локальных LAN сокетов proxychains

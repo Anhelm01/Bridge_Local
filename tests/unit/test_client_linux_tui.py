@@ -47,31 +47,35 @@ def test_tui_official_theme_properties() -> None:
 
 def test_tui_key_actions() -> None:
     """Проверяет работу диспетчера клавиатурных событий."""
-    # Цифровые клавиши 1..6
+    # Цифровые клавиши 1..7
     assert handle_key_action("1", "POCKET") == ("DASH", True)
     assert handle_key_action("2", "DASH") == ("POCKET", True)
     assert handle_key_action("3", "DASH") == ("NOTES", True)
     assert handle_key_action("4", "DASH") == ("EXEC", True)
     assert handle_key_action("5", "DASH") == ("CONFIG", True)
     assert handle_key_action("6", "DASH") == ("DEV", True)
+    assert handle_key_action("7", "DASH") == ("CONNECT", True)
 
-    # Функциональные клавиши F1..F6 (escape-последовательности)
+    # Функциональные клавиши F1..F7 (escape-последовательности)
     assert handle_key_action("\x1bOP", "DASH") == ("DASH", True)
     assert handle_key_action("\x1bOQ", "DASH") == ("POCKET", True)
     assert handle_key_action("\x1bOR", "DASH") == ("NOTES", True)
     assert handle_key_action("\x1bOS", "DASH") == ("EXEC", True)
     assert handle_key_action("\x1b[15~", "DASH") == ("CONFIG", True)
     assert handle_key_action("\x1b[17~", "DASH") == ("DEV", True)
+    assert handle_key_action("\x1b[18~", "DASH") == ("CONNECT", True)
 
     # Именованные режимы
     assert handle_key_action("dash", "POCKET") == ("DASH", True)
     assert handle_key_action("pocket", "DASH") == ("POCKET", True)
+    assert handle_key_action("connect", "DASH") == ("CONNECT", True)
     assert handle_key_action("w", "DASH") == ("WELCOME", True)
     assert handle_key_action("a", "DASH") == ("ANIM", True)
 
     # Tab cycling
     assert handle_key_action("\t", "DASH") == ("POCKET", True)
-    assert handle_key_action("\t", "DEV") == ("DASH", True)
+    assert handle_key_action("\t", "DEV") == ("CONNECT", True)
+    assert handle_key_action("\t", "CONNECT") == ("DASH", True)
 
     # Выход
     assert handle_key_action("q", "DASH") == ("DASH", False)
@@ -80,6 +84,8 @@ def test_tui_key_actions() -> None:
 
 def test_tui_render_modes_without_errors() -> None:
     """Проверяет рендеринг всех экранов без исключений."""
+    from bridge_client_linux.tui.screens import render_connect_mode
+
     theme = OFFICIAL_THEME
     render_welcome_screen(theme)
     render_operational_header(theme)
@@ -89,9 +95,10 @@ def test_tui_render_modes_without_errors() -> None:
     render_exec_mode(theme)
     render_config_mode(theme)
     render_dev_mode(theme)
+    render_connect_mode(theme)
     render_theme_spec(theme)
 
-    for m in ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "WELCOME"]:
+    for m in ["DASH", "POCKET", "NOTES", "EXEC", "CONFIG", "DEV", "CONNECT", "WELCOME"]:
         render_current_mode(m, theme)
 
 

@@ -244,6 +244,26 @@ class BridgeConfig(BaseModel):
         logger.info("Конфигурация загружена из: %s", config_path)
         return config
 
+    def update_connection(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        psk_token: str | None = None,
+        save: bool = True,
+    ) -> None:
+        """
+        Обновляет параметры подключения и опционально сохраняет в TOML-файл.
+        """
+        if host is not None:
+            self.connection.host = host.strip()
+        if port is not None:
+            self.connection.port = int(port)
+        if psk_token is not None:
+            clean_token = psk_token.strip()
+            self.connection.psk_token = clean_token if clean_token else None
+        if save:
+            self.save()
+
     def get_pocket_dir(self) -> Path:
         """
         Возвращает абсолютный путь к каталогу кармана.

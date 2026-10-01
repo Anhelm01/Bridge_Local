@@ -11,6 +11,7 @@ bridge_agent_win.cli — Консольная утилита управлени�
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 
@@ -26,6 +27,135 @@ from bridge_agent_win.service import (
     main_standalone,
     run_scm_service,
 )
+
+
+def get_local_ip_addresses() -> list[str]:
+    """Возвращает список IPv4 адресов локальных сетевых интерфейсов."""
+    ips: list[str] = []
+    try:
+        import socket
+
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if not ip.startswith("127."):
+                ips.append(ip)
+    except Exception:
+        pass
+    if not ips:
+        try:
+            import socket
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ips.append(s.getsockname()[0])
+            s.close()
+        except Exception:
+            pass
+    return ips
+
+
+def setup_interactive() -> None:
+    """Интерактивный мастер первоначальной настройки подключения без ручной правки TOML."""
+    from bridge_core.config import BridgeConfig
+
+    print("=" * 65)
+    print("  Bridge Local Windows Agent - Мастер настройки подключения")
+    print("=" * 65)
+
+    ips = get_local_ip_addresses()
+    print("\nСетевые адреса этого компьютера (вводите их на Linux):")
+    if ips:
+        for ip in ips:
+            print(f"  --> {ip}")
+    else:
+        print("  --> 127.0.0.1 (локальный loopback)")
+
+    cfg = BridgeConfig.load()
+    cur_port = cfg.connection.port
+    cur_host = cfg.connection.host
+    cur_token = cfg.connection.psk_token or "BridgeLocalSecretKey_Anhelm_2026_Secure"
+    cur_pocket = cfg.pocket.path
+    tok_preview = f"{cur_token[:8]}..." if cur_token else "(отключен)"
+
+    print(f"\nТекущие параметры ({cfg._config_path or 'bridge.toml'}):")
+    print(f"  Порт агента:                   {cur_port}")
+    print(f"  Слушать на адресе (Bind Host): {cur_host}")
+    print(f"  Ключ безопасности (PSK):       {tok_preview}")
+    print(f"  Каталог кармана:               {cur_pocket}")
+
+    try:
+        prompt_port = f"\n[1/3] Введите TCP-порт [Enter = {cur_port}]: "
+        new_port_str = input(prompt_port).strip()
+        if new_port_str:
+            try:
+                cfg.connection.port = int(new_port_str)
+            except ValueError:
+                print(f"[WARN] Некорректный порт '{new_port_str}', оставлен {cur_port}")
+
+        prompt_tok = "[2/3] Введите ключ безопасности (PSK) [Enter = оставить]: "
+        new_token_str = input(prompt_tok).strip()
+        if new_token_str:
+            cfg.connection.psk_token = new_token_str
+
+        prompt_pock = f"[3/3] Каталог кармана [Enter = {cur_pocket}]: "
+        new_pocket_str = input(prompt_pock).strip()
+        if new_pocket_str:
+            cfg.pocket.path = new_pocket_str
+
+        cfg.save()
+        print("\n" + "=" * 65)
+        print("[OK] Параметры успешно сохранены в bridge.toml!")
+        print(f"  Порт агента: {cfg.connection.port}")
+        print(f"  Слушать на:  {cfg.connection.host}")
+        print(f"  Карман:      {cfg.pocket.path}")
+        print("=" * 65)
+        print("\nЧто делать дальше:")
+        if ips:
+            print(f"  1. На Linux введите: bridge connect {ips[0]}:{cfg.connection.port}")
+            print(f"     или в TUI на [F7:CONNECT] введите: {ips[0]}:{cfg.connection.port}")
+        print("  2. На Windows запустите run_agent.bat или install_service.bat")
+    except KeyboardInterrupt, EOFError:
+        print("\n[INFO] Настройка отменена пользователем.")
+
+
+def handle_config_command(args: list[str]) -> None:
+    """Управление конфигурацией из командной строки."""
+    from bridge_core.config import BridgeConfig
+
+    cfg = BridgeConfig.load()
+    if not args or args[0] in ("show", "list", "status"):
+        ips = get_local_ip_addresses()
+        print("Текущая конфигурация Windows Agent:")
+        print(f"  Конфиг-файл: {cfg._config_path or 'bridge.toml'}")
+        print(f"  Порт:        {cfg.connection.port}")
+        print(f"  Bind Host:   {cfg.connection.host}")
+        print(f"  Карман:      {cfg.pocket.path}")
+        print(f"  Токен:       {'Задан' if cfg.connection.psk_token else 'Отключен'}")
+        print("\nIP-адреса для подключения с Linux:")
+        for ip in ips:
+            print(f"  --> {ip}:{cfg.connection.port}")
+        return
+
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("--port", "-p") and i + 1 < len(args):
+            with contextlib.suppress(ValueError):
+                cfg.connection.port = int(args[i + 1])
+            i += 2
+        elif a in ("--host", "-h") and i + 1 < len(args):
+            cfg.connection.host = args[i + 1]
+            i += 2
+        elif a in ("--token", "-t") and i + 1 < len(args):
+            cfg.connection.psk_token = args[i + 1]
+            i += 2
+        elif a in ("--pocket",) and i + 1 < len(args):
+            cfg.pocket.path = args[i + 1]
+            i += 2
+        else:
+            i += 1
+    cfg.save()
+    print(f"[OK] Конфигурация сохранена в {cfg._config_path or 'bridge.toml'}")
 
 
 def main() -> None:
@@ -45,6 +175,8 @@ def main() -> None:
     if not args or args[0] in ("-h", "--help", "help"):
         print("bridge-agent — Windows Agent Management CLI")
         print("\nКоманды:")
+        print("  setup                   Мастер быстрой настройки (IP, порт, токен)")
+        print("  config [show|opts]      Просмотр и изменение сетевых параметров")
         print("  run                     Запуск фонового демона службы Windows (консольный режим)")
         print("  service-run             Запуск в режиме диспетчера системной службы SCM")
         print("  service [cmd]           Управление службой SCM (install/start/stop/remove)")
@@ -55,7 +187,11 @@ def main() -> None:
         sys.exit(0)
 
     cmd = args[0].lower()
-    if cmd == "run":
+    if cmd == "setup":
+        setup_interactive()
+    elif cmd == "config":
+        handle_config_command(args[1:])
+    elif cmd == "run":
         main_standalone()
     elif cmd in ("service-run", "scm-run"):
         run_scm_service()

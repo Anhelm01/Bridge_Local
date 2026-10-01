@@ -126,6 +126,15 @@ pause
 "@
           Set-Content -Path (Join-Path $distPkg "uninstall_service.bat") -Value $uninstallBat -Encoding ASCII
 
+          $setupBat = @"
+@echo off
+title Bridge Local - Setup Connection
+cd /d "%~dp0"
+bridge-agent.exe setup
+pause
+"@
+          Set-Content -Path (Join-Path $distPkg "setup_connection.bat") -Value $setupBat -Encoding ASCII
+
           # 4. Каталог кармана
           New-Item -ItemType Directory -Path (Join-Path $distPkg "pocket") -Force | Out-Null
 

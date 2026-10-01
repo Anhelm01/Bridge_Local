@@ -410,7 +410,7 @@ def render_operational_header(
 
 
 def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> None:
-    """Верхний таб-бар переключения режимов с поддержкой функциональных клавиш F1..F6."""
+    """Верхний таб-бар переключения режимов с поддержкой функциональных клавиш F1..F7."""
     modes = [
         ("DASH", "F1"),
         ("POCKET", "F2"),
@@ -418,6 +418,7 @@ def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> 
         ("EXEC", "F4"),
         ("CONFIG", "F5"),
         ("DEV", "F6"),
+        ("CONNECT", "F7"),
     ]
     bar = Text()
     bar.append("[BRIDGE] ", style=f"bold black on {theme.blue}")
@@ -428,7 +429,7 @@ def render_mode_tabs(active_mode: str, theme: PaletteTheme = OFFICIAL_THEME) -> 
             bar.append(f"[{key}:{name}]", style=f"dim {theme.secondary}")
         if i < len(modes) - 1:
             bar.append(" │ ")
-    bar.append("  [dim](Переключение: Tab / F1..F6)[/]")
+    bar.append("  [dim](Переключение: Tab / F1..F7)[/]")
     console.print(Panel(bar, style=theme.secondary, expand=True, padding=0))
 
 
@@ -823,6 +824,98 @@ def render_dev_mode(
     console.print(grid)
 
 
+def render_connect_mode(
+    theme: PaletteTheme = OFFICIAL_THEME,
+    data: dict[str, Any] | None = None,
+) -> None:
+    """Режим 7: CONNECT / БЫСТРОЕ ПОДКЛЮЧЕНИЕ К УЗЛУ (F7)."""
+    ctx = get_live_context(data)
+    render_operational_header(theme, ctx)
+    render_mode_tabs("CONNECT", theme)
+
+    input_buf = ctx["input_buffer"]
+    status_msg = ctx["status_msg"]
+
+    grid = Table.grid(expand=True)
+    grid.add_column(ratio=1)
+    grid.add_column(ratio=1)
+
+    # 1. Левая колонка: Текущие параметры и статус
+    status_style = theme.green if ctx["is_online"] else theme.red
+    status_badge = (
+        f"[bold {theme.green}][ONLINE] Доступен ({ctx['latency_str']})[/]"
+        if ctx["is_online"]
+        else f"[bold {theme.red}][OFFLINE] Сокет не отвечает[/]"
+    )
+    auth_badge = (
+        f"[bold {theme.green}][АКТИВЕН] HMAC-SHA256[/]"
+        if ctx["psk_set"]
+        else "[dim]Отключен (Open/Без токена)[/]"
+    )
+
+    info_lines = [
+        "[bold white]ПАРАМЕТРЫ СЕТЕВОГО ПОДКЛЮЧЕНИЯ (bridge.toml):[/]",
+        f"  • [bold {theme.blue}]Целевой узел:[/]           [bold white]{ctx['tgt_node']}[/]",
+        f"  • [bold {theme.purple}]IP-адрес / Host:[/]        [bold white]{ctx['tgt_host']}[/]",
+        f"  • [bold {theme.amber}]TCP-порт:[/]               [bold white]{ctx['tgt_port']}[/]",
+        f"  • [bold white]Полный адрес:[/]          [bold white]{ctx['tgt_address']}[/]",
+        f"  • [bold white]Статус связи:[/]          {status_badge}",
+        f"  • [bold white]Аутентификация (PSK):[/]  {auth_badge}",
+        f"  • [dim]Конфиг-файл:[/]            [dim]{ctx['cfg']._config_path or 'bridge.toml'}[/]",
+        "",
+        "[dim]─────────────────────────────────────────────────────────────────────────────[/]",
+        f"  [bold {theme.green}]192.168.1.150:9732[/]  -> записать IP и порт и проверить связь",
+        f"  [bold {theme.green}]192.168.1.150[/]       -> обновить только IP",
+        f"  [bold {theme.green}]:9740[/]                -> изменить только порт",
+        f"  [bold {theme.green}]token <ключ>[/]        -> обновить ключ безопасности PSK",
+        f"  [bold {theme.green}]test[/] / [bold {theme.green}][R][/]          -> проверить связь",
+    ]
+
+    left_panel = Panel(
+        "\n".join(info_lines),
+        title=f"[bold {theme.blue}][ 1. АДРЕС ЦЕЛЕВОГО УЗЛА И СТАТУС ][/]",
+        border_style=status_style,
+    )
+
+    # 2. Правая колонка: Инструкция для оператора
+    help_lines = [
+        "[bold white]БЫСТРОЕ ПОДКЛЮЧЕНИЕ БЕЗ ПРАВКИ TOML-ФАЙЛОВ:[/]",
+        "1. Вам больше [bold underline]не требуется[/] открывать текстовые редакторы.",
+        "2. Введите IP вашей Windows-машины в поле ввода внизу",
+        "   и нажмите [bold amber][Enter][/].",
+        "3. Программа самостоятельно:",
+        f"   - Проверит сокет (таймаут {ctx['failfast_ms']} мс).",
+        "   - Запишет изменения в локальный bridge.toml.",
+        "   - При успехе переключит статус в ONLINE и активирует обмен.",
+        "",
+        "[bold white]ПРИМЕРЫ АДРЕСОВ В ДОМАШНЕЙ СЕТИ:[/]",
+        "  • Домашний Wi-Fi: [dim]192.168.1.150:9732[/] или [dim]192.168.0.105:9732[/]",
+        "  • Локальный тест: [dim]127.0.0.1:9732[/]",
+        "  • Tailscale/VPN:  [dim]100.x.y.z:9732[/]",
+        "",
+        "[dim]Подсказка: на Windows IP можно узнать командой: ipconfig[/]",
+    ]
+
+    right_panel = Panel(
+        "\n".join(help_lines),
+        title=f"[bold {theme.amber}][ 2. РУКОВОДСТВО ОПЕРАТОРА ][/]",
+        border_style=theme.amber,
+    )
+
+    grid.add_row(left_panel, right_panel)
+    console.print(grid)
+
+    # Строка статуса и поле ввода
+    if status_msg:
+        console.print(Panel(status_msg, style=theme.secondary, padding=(0, 1)))
+
+    prompt_line = (
+        f" [bold {theme.green}]CONNECT (IP:Порт) > [/][bold white]{input_buf}[/]"
+        f"[blink {theme.blue}]█[/]  [dim](Введите IP:Порт и нажмите Enter)[/]"
+    )
+    console.print(Panel(prompt_line, border_style=theme.blue, padding=(0, 1)))
+
+
 def render_theme_spec(theme: PaletteTheme = OFFICIAL_THEME) -> None:
     """Выводит спецификацию утвержденной темы."""
     table = Table(
@@ -897,6 +990,8 @@ def render_current_mode(
         render_config_mode(theme, data)
     elif m == "DEV":
         render_dev_mode(theme, data)
+    elif m in ("CONNECT", "SETUP"):
+        render_connect_mode(theme, data)
     elif m == "WELCOME":
         render_welcome_screen(theme, data)
     elif m == "ANIM":
