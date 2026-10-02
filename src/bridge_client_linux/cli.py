@@ -509,6 +509,75 @@ def cmd_pocket_pull(
     )
 
 
+@pocket_app.command("path")
+def cmd_pocket_path(
+    config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
+    json_mode: bool = typer.Option(False, "--json", "-j", help="Вывод в формате JSON"),
+) -> None:
+    """Выводит абсолютный путь к активному каталогу кармана."""
+    cfg = BridgeConfig.load(config)
+    p = cfg.get_pocket_dir()
+    if json_mode:
+        _output_json({"pocket_path": str(p), "exists": p.exists()})
+        return
+    console.print(str(p))
+
+
+@pocket_app.command("drop")
+def cmd_pocket_drop(
+    files: list[Path] = typer.Argument(..., help="Пути к файлам для отправки в карман"),
+    target_dir: str | None = typer.Option(None, "--target-dir", "-d", help="Подкаталог в кармане"),
+    json_mode: bool = typer.Option(False, "--json", "-j", help="Вывод в формате JSON"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
+    host: str | None = typer.Option(None, "--host", "-h", help="Хост"),
+    port: int | None = typer.Option(None, "--port", "-p", help="Порт"),
+    token: str | None = typer.Option(None, "--token", "-t", help="Токен"),
+    node: str | None = typer.Option(None, "--node", "-n", help="Имя узла"),
+) -> None:
+    """Быстрая отправка файлов в удалённый карман (псевдоним для send)."""
+    cmd_send(
+        files=files,
+        target_dir=target_dir,
+        json_mode=json_mode,
+        config=config,
+        host=host,
+        port=port,
+        token=token,
+        node=node,
+    )
+
+
+@pocket_app.command("list")
+def cmd_pocket_list(
+    json_mode: bool = typer.Option(False, "--json", "-j", help="Вывод в формате JSON"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
+) -> None:
+    """Отображение содержимого локального кармана."""
+    cfg = BridgeConfig.load(config)
+    pocket_dir = cfg.get_pocket_dir()
+    if not pocket_dir.exists():
+        if json_mode:
+            _output_json({"pocket_path": str(pocket_dir), "files": [], "count": 0})
+            return
+        console.print(f"[bold yellow]Каталог кармана не существует: {pocket_dir}[/]")
+        return
+    items = []
+    for f in pocket_dir.rglob("*"):
+        if f.is_file():
+            rel = f.relative_to(pocket_dir)
+            size = f.stat().st_size
+            items.append({"file": str(rel), "size_bytes": size})
+    if json_mode:
+        _output_json({"pocket_path": str(pocket_dir), "files": items, "count": len(items)})
+        return
+    console.print(f"[bold cyan]Содержимое кармана ({pocket_dir}):[/]")
+    if not items:
+        console.print("  [dim](карман пуст)[/]")
+    else:
+        for it in items:
+            console.print(f"  • [bold white]{it['file']}[/] [dim]({it['size_bytes']} байт)[/]")
+
+
 # ---------------------------------------------------------------------------
 # 3.5 Top-level Direct Send (Human Drop)
 # ---------------------------------------------------------------------------
@@ -774,6 +843,21 @@ def cmd_config_set(
     console.print(f"[bold green][OK] Параметры сохранены в {cfg._config_path or 'bridge.toml'}[/]")
     console.print(f"  Хост: [bold white]{cfg.connection.host}[/]")
     console.print(f"  Порт: [bold white]{cfg.connection.port}[/]")
+
+
+@config_app.command("path")
+def cmd_config_path(
+    json_mode: bool = typer.Option(False, "--json", "-j", help="Вывод в формате JSON"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
+) -> None:
+    """Выводит абсолютный путь к активному файлу конфигурации."""
+    cfg = BridgeConfig.load(config)
+    active_path = str(cfg._config_path.resolve()) if cfg._config_path else "bridge.toml (default)"
+    if json_mode:
+        exists = bool(cfg._config_path and cfg._config_path.exists())
+        _output_json({"config_path": active_path, "exists": exists})
+        return
+    console.print(active_path)
 
 
 @app.command("connect")

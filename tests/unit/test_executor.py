@@ -86,3 +86,25 @@ class TestPowerShellExecutor:
         result = await executor.execute(params)
         assert result.exit_code == 0
         assert "SUPER_VAL_99" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_execute_cd_directory_persistence(self, tmp_path: Path) -> None:
+        """Проверяет сохранение рабочего каталога после команды cd/Set-Location."""
+        subdir = tmp_path / "deep_folder"
+        subdir.mkdir()
+
+        executor = PowerShellExecutor(allow_posix_fallback=True)
+
+        # Команда 1: переход в подпапку
+        cmd1 = f"cd '{subdir}'"
+        res1 = await executor.execute(ExecRequestParams(command=cmd1, timeout_sec=5))
+        assert res1.exit_code == 0
+        assert res1.current_working_dir is not None
+        assert Path(res1.current_working_dir).resolve() == subdir.resolve()
+
+        # Команда 2: проверка, что следующая команда выполняется уже в subdir без явного working_dir
+        res2 = await executor.execute(ExecRequestParams(command="pwd", timeout_sec=5))
+        assert res2.exit_code == 0
+        assert str(subdir.resolve()) in res2.stdout
+        assert res2.current_working_dir is not None
+        assert Path(res2.current_working_dir).resolve() == subdir.resolve()

@@ -231,6 +231,7 @@ def get_live_context(custom_data: dict[str, Any] | None = None) -> dict[str, Any
         "notes_count": notes_count,
         "notes_unread": 0,
         "notes_file_display": "pocket/.notes/notes.jsonl",
+        "current_dir": d.get("current_dir") or "C:\\BridgeService",
         "exec_history": d.get("exec_history", []),
         "input_buffer": d.get("input_buffer", ""),
         "status_msg": d.get("status_msg", ""),
@@ -728,8 +729,13 @@ def render_exec_mode(
         if offset > 0:
             lines.append(f"[dim]▲ (скрыто: {offset} выше)[/]")
 
-        for cmd, output, code in visible_history:
-            lines.append(f"[bold {theme.purple}]PS C:\\BridgeService> [/][bold white]{cmd}[/]")
+        for item in visible_history:
+            cmd = item[0]
+            output = item[1]
+            code = item[2]
+            default_dir = ctx.get("current_dir") or "C:\\BridgeService"
+            dir_label = item[3] if len(item) > 3 and item[3] else default_dir
+            lines.append(f"[bold {theme.purple}]PS {dir_label}> [/][bold white]{cmd}[/]")
             if output:
                 lines.append(output.strip())
             color = theme.green if code == 0 else theme.red
@@ -758,8 +764,9 @@ def render_exec_mode(
         "[bold white]Ввод команды ([Enter] Выполнить | [←/→/Tab] Навигация | [Ctrl+C] Выход):[/]"
     )
 
+    cur_dir = ctx.get("current_dir") or "C:\\BridgeService"
     lines.append(
-        f"[bold {theme.blue}]PS C:\\BridgeService> [/][bold white]{input_buf}[/][blink]█[/]"
+        f"[bold {theme.blue}]PS {cur_dir}> [/][bold white]{input_buf}[/][blink]█[/]"
     )
     if status_msg:
         lines.append(f"  {status_msg}")

@@ -170,6 +170,8 @@ class WindowsBridgeService:
         self.server.register_handler(RpcMethod.NOTES_HISTORY, self._handle_notes_history)
         self.server.register_handler(RpcMethod.NOTES_MARK_READ, self._handle_notes_mark_read)
 
+        self.monitor_callback: Any = None
+
         logger.info(
             "[SERVICE-INIT] WindowsBridgeService инициализирован: node=%s, host=%s:%d, pocket=%s",
             self.config.node.name,
@@ -177,6 +179,12 @@ class WindowsBridgeService:
             self.config.connection.port,
             pocket_dir,
         )
+
+    def emit_monitor_event(self, event_type: str, data: dict[str, Any]) -> None:
+        """Оповещение консольного монитора о событии."""
+        if self.monitor_callback is not None:
+            with contextlib.suppress(Exception):
+                self.monitor_callback(event_type, data)
 
     # -----------------------------------------------------------------------
     # Вспомогательные методы
@@ -236,6 +244,15 @@ class WindowsBridgeService:
             uptime_seconds=uptime,
             status=NodeStatus.READY,
         )
+        peer = session_info.get("peername")
+        client_ip = peer[0] if (peer and isinstance(peer, (list, tuple))) else "127.0.0.1"
+        self.emit_monitor_event(
+            "client_ping",
+            {
+                "client_ip": client_ip,
+                "source_node": params.get("source_node", client_ip),
+            },
+        )
         return pong.model_dump()
 
     async def _handle_exec(
@@ -271,6 +288,19 @@ class WindowsBridgeService:
             )
             await self.audit_logger.write(audit_entry)
 
+            self.emit_monitor_event(
+                "exec_completed",
+                {
+                    "command": exec_params.command,
+                    "exit_code": result.exit_code,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "duration_ms": result.duration_ms,
+                    "working_dir": result.current_working_dir or self.executor.current_working_dir,
+                    "client_ip": client_ip,
+                },
+            )
+
             return result.model_dump()
 
         except RpcCallError as e:
@@ -290,6 +320,19 @@ class WindowsBridgeService:
                 stderr_preview=e.message,
             )
             await self.audit_logger.write(audit_entry)
+
+            self.emit_monitor_event(
+                "exec_completed",
+                {
+                    "command": exec_params.command,
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": e.message,
+                    "duration_ms": duration_ms,
+                    "working_dir": self.executor.current_working_dir,
+                    "client_ip": client_ip,
+                },
+            )
             raise
 
     # -----------------------------------------------------------------------
@@ -323,6 +366,15 @@ class WindowsBridgeService:
 
         try:
             data, is_last, total_size = self.pocket_manager.read_chunk(pull_params)
+            if pull_params.offset == 0:
+                self.emit_monitor_event(
+                    "file_requested",
+                    {
+                        "path": pull_params.path,
+                        "total_size": total_size,
+                        "client_ip": _client_ip,
+                    },
+                )
             res = PocketPullResult(
                 path=pull_params.path,
                 offset=pull_params.offset,
@@ -377,6 +429,16 @@ class WindowsBridgeService:
                     stdout_preview=f"Saved '{push_params.path}', sha={push_params.sha256_full}",
                 )
                 await self.audit_logger.write(audit_entry)
+
+                self.emit_monitor_event(
+                    "file_received",
+                    {
+                        "path": push_params.path,
+                        "bytes": push_params.offset + chunk_len,
+                        "sha256": push_params.sha256_full,
+                        "client_ip": client_ip,
+                    },
+                )
 
             return res.model_dump()
 
@@ -454,6 +516,17 @@ class WindowsBridgeService:
         )
         await self.audit_logger.write(audit_entry)
 
+        self.emit_monitor_event(
+            "note_received",
+            {
+                "note_id": res.note_id,
+                "author_os": str(note_params.author_os),
+                "source_node": params.get("source_node") or client_ip,
+                "text": note_params.text,
+                "received_at": res.received_at,
+            },
+        )
+
         return res.model_dump()
 
     async def _handle_notes_history(
@@ -503,9 +576,26 @@ def main_standalone() -> None:
     config = BridgeConfig.load()
     service = WindowsBridgeService(config)
 
+    from bridge_agent_win.monitor import AgentConsoleMonitor, ensure_windows_console_encoding
+
+    ensure_windows_console_encoding()
+    monitor = AgentConsoleMonitor(config)
+    service.monitor_callback = monitor.on_event
+
     try:
-        asyncio.run(service.run_forever())
-    except KeyboardInterrupt, SystemExit:
+        monitor.print_banner()
+
+        async def _run_interactive() -> None:
+            await service.start()
+            monitor.start_interactive_loop(service)
+            try:
+                await service._stop_event.wait()
+            finally:
+                await service.stop()
+                monitor.stop()
+
+        asyncio.run(_run_interactive())
+    except (KeyboardInterrupt, SystemExit):
         logger.info("[SERVICE] Остановка по сигналу прерывания")
 
 

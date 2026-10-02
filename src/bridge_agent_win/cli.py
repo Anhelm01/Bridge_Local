@@ -165,6 +165,10 @@ def handle_config_command(args: list[str]) -> None:
             print(f"  --> {ip}:{cfg.connection.port}")
         return
 
+    if args[0] == "path":
+        print(str(cfg._config_path.resolve()) if cfg._config_path else "bridge.toml")
+        return
+
     i = 0
     while i < len(args):
         a = args[i]
@@ -187,9 +191,9 @@ def handle_config_command(args: list[str]) -> None:
     print(f"[OK] Конфигурация сохранена в {cfg._config_path or 'bridge.toml'}")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Главная точка входа bridge-agent."""
-    args = sys.argv[1:]
+    args = list(argv) if argv is not None else sys.argv[1:]
 
     # Проверка запуска в качестве системной службы Windows SCM
     # Выполняется только если процесс вызван без аргументов (SCM запуск)
@@ -212,6 +216,7 @@ def main() -> None:
         print("  service-run             Запуск в режиме диспетчера системной службы SCM")
         print("  service [cmd]           Управление службой SCM (install/start/stop/remove)")
         print("  drop <file>             Отправить файл в локальный Карман")
+        print("  tray [--with-agent]     Запуск значка управления в системном трее Windows")
         print("  install-context-menu    Установить пункт контекстного меню в Проводник")
         print("  uninstall-context-menu  Удалить пункт контекстного меню из Проводника")
         print("  generate-reg [out.reg]  Сгенерировать файл реестра .reg")
@@ -228,6 +233,32 @@ def main() -> None:
         run_scm_service()
     elif cmd == "service":
         handle_service_command(args[1:])
+    elif cmd == "tray":
+        from bridge_agent_win.tray import BridgeTrayIcon
+
+        tray = BridgeTrayIcon()
+        if "--with-agent" in args or "--standalone" in args:
+            tray.start_standalone_agent()
+        try:
+            tray.run()
+        except (KeyboardInterrupt, SystemExit):
+            tray.stop()
+    elif cmd == "pocket":
+        if len(args) > 1 and args[1] == "path":
+            from bridge_core.config import BridgeConfig
+
+            cfg = BridgeConfig.load()
+            print(str(cfg.get_pocket_dir()))
+            return
+        if len(args) > 1 and args[1] == "drop":
+            args = ["drop", *args[2:]]
+            cmd = "drop"
+        else:
+            from bridge_core.config import BridgeConfig
+
+            cfg = BridgeConfig.load()
+            print(f"Каталог кармана: {cfg.get_pocket_dir()}")
+            return
     elif cmd == "drop":
         if len(args) < 2:
             print("[ERROR] Укажите путь к файлу: bridge-agent drop <file>")

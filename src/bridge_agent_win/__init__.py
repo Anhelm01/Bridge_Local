@@ -18,11 +18,14 @@ if _src_dir not in sys.path:
 from bridge_agent_win.executor import PowerShellExecutor  # noqa: E402
 from bridge_agent_win.process_killer import kill_process_tree  # noqa: E402
 from bridge_agent_win.service import WindowsBridgeService, main_standalone  # noqa: E402
+from bridge_agent_win.tray import BridgeTrayIcon, TrayAgentStatus  # noqa: E402
 
 __version__ = "0.1.0-dev"
 
 __all__ = [
+    "BridgeTrayIcon",
     "PowerShellExecutor",
+    "TrayAgentStatus",
     "WindowsBridgeService",
     "__version__",
     "kill_process_tree",

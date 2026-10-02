@@ -277,10 +277,17 @@ class BridgeConfig(BaseModel):
 
         Если в bridge.toml указан относительный путь (например, './pocket'),
         он разрешается относительно каталога самого bridge.toml.
+        Если bridge.toml лежит внутри каталога сборки (dist/build), путь автоматически
+        привязывается к корню репозитория, предотвращая раздвоение карманов.
         """
         p = Path(self.pocket.path).expanduser()
         if not p.is_absolute() and self._config_path:
-            return (self._config_path.parent / p).resolve()
+            base = self._config_path.parent
+            if base.name.lower() in ("dist", "build") and (
+                (base.parent / "pocket").exists() or (base.parent / "bridge.toml").exists()
+            ):
+                base = base.parent
+            return (base / p).resolve()
         return p.resolve()
 
     def to_toml_string(self) -> str:

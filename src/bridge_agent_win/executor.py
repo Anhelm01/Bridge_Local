@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,8 @@ class PowerShellExecutor:
     Движок удаленного выполнения команд PowerShell на стороне агента Windows.
     """
 
+    CWD_MARKER_REGEX = re.compile(r"[\r\n]*__BRIDGE_CWD__:(.*?)(?:\r?\n|$)")
+
     def __init__(
         self,
         powershell_bin: str | None = None,
@@ -47,6 +50,7 @@ class PowerShellExecutor:
     ) -> None:
         self.dev_logging = dev_logging
         self.allow_posix_fallback = allow_posix_fallback
+        self.current_working_dir: str | None = None
 
         # Ищем доступный бинарник powershell/pwsh
         self.powershell_bin = powershell_bin or self._detect_powershell()
@@ -68,14 +72,25 @@ class PowerShellExecutor:
 
     def _build_command_args(self, command: str) -> list[str]:
         """
-        Формирует список аргументов запуска PowerShell с гарантией UTF-8 консоли.
+        Формирует список аргументов запуска PowerShell с гарантией UTF-8 консоли
+        и отслеживанием рабочего каталога (CWD).
         """
         # Префикс инициализации UTF-8 в PowerShell сессии
         utf8_init = (
             "$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); "
-            "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new(); "
+            "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new();\n"
         )
-        full_command = utf8_init + command
+        # Суффикс для фиксации exit-кода и вывода маркера текущей директории
+        ps_suffix = (
+            "\n$__bridge_exit = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } "
+            "elseif (-not $?) { 1 } else { 0 }\n"
+            "$__bridge_loc = (Get-Location)\n"
+            "$__bridge_cwd = if ($__bridge_loc.Provider.Name -eq 'FileSystem') { "
+            "$__bridge_loc.Path } else { $__bridge_loc.ProviderPath }\n"
+            'Write-Output "`n__BRIDGE_CWD__:$__bridge_cwd"\n'
+            "if ($__bridge_exit -ne 0) { exit $__bridge_exit }\n"
+        )
+        full_command = utf8_init + command + ps_suffix
 
         if self.powershell_bin:
             return [
@@ -91,7 +106,13 @@ class PowerShellExecutor:
         # Если powershell нет (например на чистом Linux в mock-режиме)
         if self.allow_posix_fallback and sys.platform != "win32":
             logger.debug("[EXECUTOR-MOCK] PowerShell не найден, фоллбэк на /bin/bash")
-            return ["/bin/bash", "-c", command]
+            bash_script = (
+                f"{command.strip()}\n"
+                "__bridge_exit=$?\n"
+                'echo -e "\\n__BRIDGE_CWD__:$(pwd)"\n'
+                "exit $__bridge_exit\n"
+            )
+            return ["/bin/bash", "-c", bash_script]
 
         raise FileNotFoundError("PowerShell (powershell.exe или pwsh) не найден в PATH системы")
 
@@ -119,19 +140,25 @@ class PowerShellExecutor:
         if params.env:
             proc_env.update(params.env)
 
+        # Определяем рабочий каталог: явный из params или сохранённый от предыдущих команд
+        effective_cwd = params.working_dir or self.current_working_dir
+        if effective_cwd and not os.path.exists(effective_cwd):
+            effective_cwd = None
+
         logger.info(
-            "[DEV-EXEC-START] Команда: %.120s (timeout=%ds, admin=%s, dir=%s)",
+            "[DEV-EXEC-START] Команда: %.120s (timeout=%ds, admin=%s, dir=%s, effective_dir=%s)",
             params.command,
             params.timeout_sec,
             params.run_as_admin,
             params.working_dir,
+            effective_cwd,
         )
 
         # Настройка группы процессов для надёжного завершения дерева
         kwargs: dict[str, object] = {
             "stdout": asyncio.subprocess.PIPE,
             "stderr": asyncio.subprocess.PIPE,
-            "cwd": params.working_dir,
+            "cwd": effective_cwd,
             "env": proc_env,
         }
 
@@ -191,27 +218,41 @@ class PowerShellExecutor:
         completed_at = datetime.now(UTC).isoformat()
 
         # Декодируем вывод с нормализацией и устранением mojibake
-        decoded_stdout = WindowsOutputDecoder.decode(raw_stdout)
+        decoded_stdout_raw = WindowsOutputDecoder.decode(raw_stdout)
         decoded_stderr = WindowsOutputDecoder.decode(raw_stderr)
+
+        # Извлекаем маркер текущего каталога и очищаем stdout
+        extracted_cwd: str | None = None
+        cleaned_stdout = decoded_stdout_raw.text
+        m = self.CWD_MARKER_REGEX.search(decoded_stdout_raw.text)
+        if m:
+            extracted_cwd = m.group(1).strip()
+            cleaned_stdout = self.CWD_MARKER_REGEX.sub("", decoded_stdout_raw.text).rstrip("\r\n")
+            if extracted_cwd:
+                self.current_working_dir = extracted_cwd
+
+        final_cwd = extracted_cwd or self.current_working_dir or effective_cwd
 
         exit_code = proc.returncode if proc.returncode is not None else -1
 
         logger.info(
-            "[DEV-EXEC-DONE] PID %d завершился (exit=%d, duration=%d ms, out=%d ch, err=%d ch)",
+            "[DEV-EXEC-DONE] PID %d завершился (exit=%d, ms=%d, out=%d, err=%d, cwd=%s)",
             pid,
             exit_code,
             duration_ms,
-            len(decoded_stdout.text),
+            len(cleaned_stdout),
             len(decoded_stderr.text),
+            final_cwd,
         )
 
         return ExecResult(
             exit_code=exit_code,
-            stdout=decoded_stdout.text,
+            stdout=cleaned_stdout,
             stderr=decoded_stderr.text,
             duration_ms=duration_ms,
             started_at=started_at,
             completed_at=completed_at,
             timed_out=timed_out,
-            encoding_detected=decoded_stdout.encoding_used,
+            encoding_detected=decoded_stdout_raw.encoding_used,
+            current_working_dir=final_cwd,
         )

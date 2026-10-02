@@ -230,6 +230,10 @@ class ExecResult(BaseModel):
         default="utf-8",
         description="Кодировка, обнаруженная в выводе процесса",
     )
+    current_working_dir: str | None = Field(
+        default=None,
+        description="Текущий рабочий каталог после выполнения команды",
+    )
 
 
 class ExecTimeoutErrorData(BaseModel):

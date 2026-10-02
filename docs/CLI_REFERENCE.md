@@ -259,6 +259,7 @@ bridge-agent [команда] [аргументы]
 | **`bridge-agent config show`** | Отображение активного конфигурационного файла `bridge.toml`. |
 | **`bridge-agent config set`** | Изменение настроек хоста, порта и токена PSK в `bridge.toml`. |
 | **`bridge-agent run`** | Консольный запуск агента в текущем терминале Windows (режим отладки). Выводит трассировку пакетов в реальном времени. Прерывается по `Ctrl+C`. |
+| **`bridge-agent tray`** | Запуск агента в системном трее Windows (область уведомлений рядом с часами). Предоставляет графическое контекстное меню: статус агента, запуск/остановка службы Windows SCM, открытие папки Карман в Проводнике, выход. Запуск также доступен через `run_tray.bat`. |
 | **`bridge-agent service-run`** | Запуск внутреннего рабочего цикла службы под управлением Service Control Manager (SCM). Вызывается самой ОС при старте службы. |
 | **`bridge-agent service install`** | Регистрация службы `BridgeLocalAgent` в реестре Windows SCM с автоматическим типом запуска. |
 | **`bridge-agent service start`** | Запуск зарегистрированной системной службы `BridgeLocalAgent`. |
@@ -268,6 +269,25 @@ bridge-agent [команда] [аргументы]
 | **`bridge-agent install-context-menu`** | Регистрация пункта «Отправить в Карман (Bridge Local)» в контекстном меню Проводника Windows (`HKCU\Software\Classes\*\shell\BridgeDrop`). |
 | **`bridge-agent uninstall-context-menu`**| Удаление пункта контекстного меню Проводника Windows из реестра. |
 | **`bridge-agent generate-reg [out.reg]`** | Экспорт настроек контекстного меню в файл реестра `.reg` для ручного применения без прав администратора. |
+
+---
+
+### 4.2. Межагентный сторож событий: `scripts/watch_bridge.py`
+
+Скрипт обеспечивает гарантированное двустороннее пробуждение («пинок») автономных ИИ-агентов Antigravity при возникновении событий на удаленном узле:
+
+```bash
+# На стороне Linux (опрос сокета Windows, авто-скачивание файлов, пробуждение при событиях):
+python scripts/watch_bridge.py --role client --timeout 300
+
+# На стороне Windows (мониторинг локального pocket, notes.jsonl и agent_bus, мгновенное пробуждение):
+python scripts/watch_bridge.py --role agent --timeout 300
+```
+
+- `--role <auto|agent|client>`: Роль монитора (по умолчанию: `agent` на Windows, `client` на Linux).
+- `--timeout <sec>`: Лимит ожидания в секундах (по умолчанию: 300, 0 — без таймаута).
+- `--poll-interval <sec>`: Интервал проверки состояния (по умолчанию: 1.0с для клиента, 0.5с для агента).
+- `--continuous`, `-c`: Непрерывный мониторинг вместо однократного выхода по первому событию.
 
 ---
 

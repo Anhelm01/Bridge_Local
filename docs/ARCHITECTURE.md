@@ -152,8 +152,12 @@
    - Генерация автономных файлов реестра (`.reg`) для развертывания без повышенных привилегий.
 5. **Файловый монитор Watchdog:**
    - Автоматическое отслеживание изменений в каталоге `pocket/` с подавлением дребезга событий (debouncing) для оповещения подключенных узлов.
-6. **Административный CLI агента (`bridge_agent_win.cli`):**
-   - Команды `setup`, `config`, `run`, `service`, `drop`, `install-context-menu`, `uninstall-context-menu`, `generate-reg`.
+6. **Управление через системный трей Windows (`bridge_agent_win.tray`):**
+   - Интеграция с областью уведомлений панели задач Windows (Taskbar Notification Area / System Tray) на базе Win32 API (`Shell_NotifyIconW`, `win32gui`).
+   - Отображение статуса службы / демона, управление системной службой Windows SCM (Start / Stop) без необходимости открытия `services.msc`, быстрый переход к папке `pocket/` в Проводнике Windows.
+   - Запуск через команду `bridge-agent tray` или готовый сценарий `run_tray.bat`.
+7. **Административный CLI агента (`bridge_agent_win.cli`):**
+   - Команды `setup`, `config`, `run`, `tray`, `service`, `drop`, `install-context-menu`, `uninstall-context-menu`, `generate-reg`.
 
 ---
 

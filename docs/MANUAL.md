@@ -45,8 +45,10 @@
 Bridge_Local/
 |-- bridge.toml                  # Конфигурационный файл моста
 |-- pyproject.toml               # Метаданные и зависимости проекта
-|-- setup_connection.bat         # Мастер настройки IP, порта и токена
+|-- start.bat                    # Единый интерактивный центр управления (Control Center)
+|-- run_tray.bat                 # Запуск агента в системном трее Windows
 |-- run_agent.bat                # Запуск агента в консоли
+|-- setup_connection.bat         # Мастер настройки IP, порта и токена
 |-- build_windows_exe.bat        # Локальная компиляция bridge-agent.exe
 |-- install_context_menu.bat     # Регистрация пункта в Проводнике Windows
 |-- uninstall_context_menu.bat   # Удаление пункта из Проводника
@@ -54,12 +56,14 @@ Bridge_Local/
 |-- install_service.bat          # Регистрация службы Windows SCM (Администратор)
 |-- uninstall_service.bat        # Удаление службы SCM (Администратор)
 |-- pocket/                      # Папка локального кармана
+|   `-- agent_bus/               # Шина задач межагентного обмена
 |-- src/
 |   |-- bridge_core/             # Ядро: протокол 'BR', транспорт, pocket, notes, security
-|   |-- bridge_agent_win/        # Агент Windows: служба, PowerShell executor, контекстное меню
+|   |-- bridge_agent_win/        # Агент Windows: служба, PowerShell executor, трей, контекстное меню
 |   |-- bridge_client_linux/     # Клиент Linux: CLI, TUI, exit codes
 |   `-- bridge_local/            # Универсальная точка входа
 `-- scripts/
+    |-- watch_bridge.py          # Двусторонний сторож пробуждения ИИ-агентов
     |-- build-windows-agent.ps1  # PowerShell-скрипт сборки PyInstaller
     `-- windows/                 # Резервные копии bat-скриптов
 ```
@@ -143,6 +147,46 @@ uv sync --extra windows --extra dev
    Get-Service -Name BridgeLocalAgent
    ```
 4. **Удаление службы:** Запустите `uninstall_service.bat` от имени Администратора.
+
+### 3.8. Шаг 6: Управление агентом через системный трей Windows (`run_tray.bat`)
+
+Для повседневного визуального контроля работы моста без открытых окон консоли:
+1. Запустите `run_tray.bat` двойным кликом мыши (или команду `bridge-agent tray`).
+2. В области уведомлений Windows (рядом с системными часами) появится иконка Bridge Local.
+3. **Функции контекстного меню по правому клику на значок:**
+   - **Bridge Local Agent [ONLINE/READY]:** Отображает текущий статус агента и количество файлов в кармане.
+   - **Открыть папку Карман (Explorer):** Мгновенно открывает папку `pocket/` в Проводнике Windows для просмотра переданных файлов.
+   - **Запустить службу (Start) / Остановить службу (Stop):** Управление системной службой Windows SCM без открытия оснастки `services.msc`.
+   - **Выход:** Завершает работу значка трея и удаляет его из области уведомлений.
+
+### 3.9. Единый интерактивный центр управления (`start.bat`)
+
+Файл `start.bat` объединяет все действия в единое интерактивное меню с автоматической проверкой прав Администратора:
+```text
+==============================================================================
+                  BRIDGE LOCAL - WINDOWS CONTROL CENTER
+==============================================================================
+ Privilege Level: [ADMINISTRATOR] - Full access to SCM and Firewall
+==============================================================================
+
+  [1] QUICK START (Recommended)
+      --> Open port 9732 in Windows Firewall (All profiles)
+      --> Register "Send to Pocket" in Windows Explorer context menu
+      --> Launch Bridge Local Agent in interactive console
+
+  [2] INSTALL AS BACKGROUND WINDOWS SERVICE (SCM)
+      --> Full auto-setup + agent runs silently in background on boot
+
+  [3] Run Agent in Console only (without changing system settings)
+  [4] Run Agent in Windows System Tray (Taskbar Notification Area)
+  [5] Open Firewall Port 9732 TCP (Standalone Firewall Rule)
+  [6] Install / Update Explorer Context Menu ("Send to Pocket")
+  [7] Rebuild Executable (dist\bridge-agent.exe via PyInstaller)
+  [8] Uninstall Windows Service and Context Menu (Full Cleanup)
+
+  [0] Exit
+==============================================================================
+```
 
 ---
 
@@ -286,8 +330,9 @@ bridge-cli note list --limit 10
 
 ---
 
-## 7. Протокол взаимодействия для ИИ-агентов (agy_cli)
+## 7. Протокол взаимодействия для ИИ-агентов (Antigravity agy_cli)
 
+### 7.1. Строгий CLI-режим (`--json`)
 При вызове из скриптов автоматизации или ИИ-агентов Antigravity CLI (`agy_cli`) используйте флаг `--json` (или `-j`):
 
 ```bash
@@ -301,6 +346,34 @@ bridge-cli exec "Get-Process" --json
 - `3` (`AUTH_ERROR`): Неверный ключ PSK или ошибка HMAC подписи.
 - `4` (`COMMAND_FAILED`): Удаленный процесс PowerShell завершился с ненулевым кодом.
 - `5` (`TIMEOUT`): Превышен лимит времени ожидания ответа или выполнения команды.
+
+### 7.2. Двусторонний межмашинный мониторинг («Пинки» через `watch_bridge.py`)
+
+Для организации непрерывного диалога между двумя автономными агентами Antigravity (Linux и Windows) разработан скрипт `scripts/watch_bridge.py`.
+
+#### Принцип работы «пинка» (Wake-Up Event):
+1. Агент запускает скрипт сторожа в фоне и засыпает, освобождая ресурсы.
+2. Сторож отслеживает появление сообщений или файлов от напарника:
+   - **На стороне Windows:** сторож слушает локальный каталог `pocket/`, подкаталог `pocket/agent_bus/` и появление входящих заметок в `.notes/notes.jsonl` от `linux`.
+   - **На стороне Linux:** сторож периодически (раз в 1 сек) опрашивает сокет удаленного агента через легкие RPC, и при появлении удаленных изменений автоматически скачивает их в локальный карман.
+3. Как только событие зафиксировано, скрипт выводит структурированный JSON в stdout и завершается с кодом `0`.
+4. Завершение фонового процесса генерирует прерывание в Antigravity, мгновенно пробуждая спящего агента.
+
+#### Запуск сторожа:
+```bash
+# На Windows (в консоли агента или PowerShell):
+python scripts/watch_bridge.py --role agent --timeout 300
+
+# На Linux:
+python scripts/watch_bridge.py --role client --timeout 300
+```
+
+#### Структура шины данных (`pocket/agent_bus/`):
+```text
+pocket/agent_bus/
+|-- linux_to_win.json    # Пакет задач и запросов от Linux-агента
+`-- win_to_linux.json    # Результаты, правки и рецензии от Windows-агента
+```
 
 ---
 

@@ -347,16 +347,23 @@ def dispatch_tui_action(
 
             async def _run_exec() -> Any:
                 async with client:
-                    return await client.exec(command=cmd, timeout_sec=15)
+                    cur_cwd = state.get("current_dir")
+                    target_dir = cur_cwd if cur_cwd and cur_cwd != "C:\\BridgeService" else None
+                    return await client.exec(command=cmd, timeout_sec=15, working_dir=target_dir)
 
             res = asyncio.run(_run_exec())
+            if res.current_working_dir:
+                state["current_dir"] = res.current_working_dir
+
             out = res.stdout if res.stdout else res.stderr
-            state["exec_history"].append((cmd, out or "", res.exit_code))
+            cur_dir = state.get("current_dir") or "C:\\BridgeService"
+            state["exec_history"].append((cmd, out or "", res.exit_code, cur_dir))
             state["status_msg"] = f"[bold green][OK] Команда выполнена (код {res.exit_code})[/]"
             state["is_online"] = True
         except Exception as e:
             state["is_online"] = False
-            state["exec_history"].append((cmd, f"[СБОЙ СЕТИ / ОШИБКА] {e}", 2))
+            cur_dir = state.get("current_dir") or "C:\\BridgeService"
+            state["exec_history"].append((cmd, f"[СБОЙ СЕТИ / ОШИБКА] {e}", 2, cur_dir))
             state["status_msg"] = f"[bold red][ОШИБКА СВЯЗИ][/] {e}"
 
     elif mode == "POCKET":
@@ -586,6 +593,7 @@ def run_interactive_tui(
     state.setdefault("scroll_offsets", {"POCKET": 0, "NOTES": 0, "DEV": 0, "EXEC": 0})
     state.setdefault("input_buffer", "")
     state.setdefault("status_msg", "")
+    state.setdefault("current_dir", "C:\\BridgeService")
 
     if client is None:
         with contextlib.suppress(Exception):

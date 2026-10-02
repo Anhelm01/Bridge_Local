@@ -580,7 +580,7 @@ def render_dev_mode(theme: PaletteTheme) -> None:
 def demo_process_animations(theme: PaletteTheme) -> None:
     """Интерактивная демонстрация минимальных индикаторов активных процессов."""
     console.print(
-        f"\n[bold {theme.primary}]⚡ ДЕМОНСТРАЦИЯ МИНИМАЛЬНЫХ АНИМАЦИЙ ПРОЦЕССОВ (AT-A-GLANCE)[/]"
+        f"\n[bold {theme.primary}][>>] ДЕМОНСТРАЦИЯ МИНИМАЛЬНЫХ АНИМАЦИЙ ПРОЦЕССОВ (AT-A-GLANCE)[/]"
     )
     console.print("[dim]Оператор видит с расстояния, идет ли передача/опрос:[/dim]\n")
 
