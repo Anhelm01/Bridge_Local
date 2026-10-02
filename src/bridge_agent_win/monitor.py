@@ -90,6 +90,7 @@ class AgentConsoleMonitor:
             "    status       — текущий статус, память, аптайм и активная сессия",
             "    notes        — последние полученные записки",
             "    pocket       — список файлов в Кармане",
+            "    clip / drop  — вставить файлы/текст из буфера обмена в Карман",
             "    reset        — сброс рабочего каталога PowerShell (kill-session)",
             "    cls / clear  — очистить экран консоли",
             "    q / exit     — завершить сессию и остановить агент",
@@ -241,6 +242,18 @@ class AgentConsoleMonitor:
                     self.print_line(f"  ... и еще {len(manifest.files) - 20} файлов")
             self.print_line("---------------------------------\n")
 
+        elif cmd in ("clip", "drop"):
+            from bridge_agent_win.context_menu import drop_clipboard_to_pocket
+
+            dropped = drop_clipboard_to_pocket(show_alert=False)
+            if dropped:
+                names = ", ".join(p.name for p in dropped)
+                self.print_line(f"[{now}] [CLIP] Из буфера обмена скопировано в Карман: {names}\n")
+            else:
+                self.print_line(
+                    f"[{now}] [CLIP] Буфер обмена пуст или не содержит файлов/текста.\n"
+                )
+
         elif cmd in ("reset", "kill-session"):
             service.executor.current_working_dir = None
             self.print_line(f"[{now}] [AGENT] Рабочая директория PowerShell сброшена к исходной.")
@@ -257,6 +270,7 @@ class AgentConsoleMonitor:
             self.print_line("  status       — вывод текущих метрик и статуса агента")
             self.print_line("  notes        — список последних 5 заметок")
             self.print_line("  pocket       — просмотр файлов в Кармане")
+            self.print_line("  clip / drop  — скопировать файлы/текст из буфера обмена в Карман")
             self.print_line("  reset        — сброс рабочего каталога PowerShell (kill-session)")
             self.print_line("  cls / clear  — очистить экран")
             self.print_line("  q / exit     — остановить агент и выйти")

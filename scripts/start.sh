@@ -559,9 +559,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/bridge-cli pocket sync
+ExecStart=%h/.local/bin/bridge-cli pocket sync --watch --interval 3.0
 Restart=always
-RestartSec=10s
+RestartSec=5s
 Environment=PYTHONUNBUFFERED=1
 Environment=LD_PRELOAD=
 

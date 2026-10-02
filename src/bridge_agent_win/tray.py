@@ -81,6 +81,7 @@ IDM_STOP_SERVICE = 1008
 IDM_RESTART_SERVICE = 1009
 IDM_START_AGENT = 1010
 IDM_STOP_AGENT = 1011
+IDM_DROP_CLIPBOARD = 1012
 IDM_EXIT_TRAY = 1020
 
 
@@ -484,8 +485,14 @@ class BridgeTrayIcon:
 
         win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
 
-        # 3. Действия с каталогами
+        # 3. Действия с каталогами и буфером
         win32gui.AppendMenu(menu, win32con.MF_STRING, IDM_OPEN_POCKET, "Открыть Карман в Explorer")
+        win32gui.AppendMenu(
+            menu,
+            win32con.MF_STRING,
+            IDM_DROP_CLIPBOARD,
+            "Вставить из буфера в Карман (Drop Clipboard)",
+        )
         win32gui.AppendMenu(menu, win32con.MF_STRING, IDM_OPEN_LOGS, "Открыть журнал логов")
         win32gui.AppendMenu(menu, win32con.MF_STRING, IDM_OPEN_NOTES, "Открыть записки (.notes)")
         win32gui.AppendMenu(
@@ -540,6 +547,10 @@ class BridgeTrayIcon:
         """Маршрутизация выбора пункта контекстного меню."""
         if cmd_id in (IDM_POCKET_INFO, IDM_OPEN_POCKET):
             self.open_pocket()
+        elif cmd_id == IDM_DROP_CLIPBOARD:
+            from bridge_agent_win.context_menu import drop_clipboard_to_pocket
+
+            drop_clipboard_to_pocket(show_alert=True)
         elif cmd_id == IDM_OPEN_LOGS:
             self.open_logs()
         elif cmd_id == IDM_OPEN_NOTES:

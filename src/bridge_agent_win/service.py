@@ -597,6 +597,30 @@ def main_standalone() -> None:
         asyncio.run(_run_interactive())
     except (KeyboardInterrupt, SystemExit):
         logger.info("[SERVICE] Остановка по сигналу прерывания")
+    except OSError as e:
+        port = getattr(getattr(service, "config", None), "connection", None)
+        port_num = port.port if port else 9732
+        is_port_in_use = (
+            getattr(e, "winerror", None) == 10048
+            or getattr(e, "errno", None) == 98
+            or "10048" in str(e)
+        )
+        if is_port_in_use:
+            print(f"\n[ERROR] Порт {port_num} уже занят другим процессом!")
+            print("       Возможно, служба Windows или другая копия агента уже запущена.")
+            print("       Остановите существующий экземпляр или службу перед повторным запуском.")
+        else:
+            print(f"\n[ERROR] Ошибка сетевого сокета при запуске агента: {e}")
+        if hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            with contextlib.suppress(Exception):
+                input("\nНажмите Enter для выхода...")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n[ERROR] Критическая ошибка при работе агента: {e}")
+        if hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            with contextlib.suppress(Exception):
+                input("\nНажмите Enter для выхода...")
+        sys.exit(1)
 
 
 class BridgeLocalAgentWindowsService(_BaseServiceFramework):  # type: ignore[misc, valid-type]

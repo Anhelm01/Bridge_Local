@@ -58,18 +58,24 @@ def find_bridge_config(explicit_path: Path | str | None = None) -> Path | None:
     if repo_cfg.exists():
         return repo_cfg
 
-    # 2. Рядом с исполняемым файлом
+    # 2. Рядом с исполняемым файлом или на уровень выше (если exe в dist/ или build/)
     exe_p = Path(sys.executable).resolve()
+    if exe_p.parent.name.lower() in ("dist", "build") and (
+        exe_p.parent.parent / "bridge.toml"
+    ).exists():
+        return exe_p.parent.parent / "bridge.toml"
     if (exe_p.parent / "bridge.toml").exists():
         return exe_p.parent / "bridge.toml"
-
-    # 2b. На один уровень выше (если exe в каталоге dist/)
     if (exe_p.parent.parent / "bridge.toml").exists():
         return exe_p.parent.parent / "bridge.toml"
 
     # 2c. По пути запуска процесса argv[0]
     if sys.argv and sys.argv[0]:
         argv_p = Path(sys.argv[0]).resolve()
+        if argv_p.parent.name.lower() in ("dist", "build") and (
+            argv_p.parent.parent / "bridge.toml"
+        ).exists():
+            return argv_p.parent.parent / "bridge.toml"
         if (argv_p.parent / "bridge.toml").exists():
             return argv_p.parent / "bridge.toml"
         if (argv_p.parent.parent / "bridge.toml").exists():
@@ -270,30 +276,7 @@ def drop_file_to_pocket(
 
     cfg_file = find_bridge_config(config_path)
     cfg = BridgeConfig.load(cfg_file)
-
-    raw_pocket = Path(cfg.pocket.path).expanduser()
-    if raw_pocket.is_absolute():
-        pocket_dir = raw_pocket.resolve()
-    else:
-        # Привязываем относительный путь к каталогу найденного bridge.toml
-        if cfg_file:
-            base_dir = cfg_file.parent
-        else:
-            exe_p = Path(sys.executable).resolve()
-            if (exe_p.parent.parent / "pocket").exists():
-                base_dir = exe_p.parent.parent
-            elif (exe_p.parent / "pocket").exists():
-                base_dir = exe_p.parent
-            elif Path(r"C:\BridgeLocal\pocket").exists():
-                base_dir = Path(r"C:\BridgeLocal")
-            else:
-                base_dir = (
-                    Path(__file__).resolve().parent.parent.parent
-                    if (Path(__file__).resolve().parent.parent.parent / "bridge.toml").exists()
-                    else Path.cwd()
-                )
-        pocket_dir = (base_dir / raw_pocket).resolve()
-
+    pocket_dir = cfg.get_pocket_dir()
     pocket_dir.mkdir(parents=True, exist_ok=True)
     dest = pocket_dir / src.name
 
@@ -327,6 +310,119 @@ def drop_file_to_pocket(
                 is_error=True,
             )
         raise
+
+
+def drop_clipboard_to_pocket(
+    config_path: Path | None = None,
+    show_alert: bool = True,
+) -> list[Path]:
+    """
+    Извлекает файлы или текст из буфера обмена Windows и копирует их в Карман.
+    """
+    results: list[Path] = []
+    # 1. Попытка через win32clipboard (наиболее надежно)
+    try:
+        import win32clipboard
+        import win32con
+
+        win32clipboard.OpenClipboard()
+        try:
+            if win32clipboard.IsClipboardFormatAvailable(win32con.CF_HDROP):
+                files = win32clipboard.GetClipboardData(win32con.CF_HDROP)
+                if files:
+                    for f in files:
+                        with contextlib.suppress(Exception):
+                            results.append(
+                                drop_file_to_pocket(f, config_path=config_path, show_alert=False)
+                            )
+            elif win32clipboard.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT):
+                raw_text = str(
+                    win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT) or ""
+                ).strip()
+                if raw_text:
+                    clean_line = raw_text.strip('"').strip("'")
+                    if Path(clean_line).exists():
+                        results.append(
+                            drop_file_to_pocket(
+                                clean_line, config_path=config_path, show_alert=False
+                            )
+                        )
+                    else:
+                        cfg_file = find_bridge_config(config_path)
+                        cfg = BridgeConfig.load(cfg_file)
+                        p_dir = cfg.get_pocket_dir()
+                        p_dir.mkdir(parents=True, exist_ok=True)
+                        from datetime import datetime
+
+                        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        txt_file = p_dir / f"clipboard_note_{stamp}.txt"
+                        txt_file.write_text(raw_text, encoding="utf-8")
+                        results.append(txt_file)
+        finally:
+            win32clipboard.CloseClipboard()
+    except Exception as e:
+        logger.debug("[CLIPBOARD] win32clipboard недоступен или ошибка: %s", e)
+
+    # 2. Fallback через PowerShell если результаты не получены
+    if not results and sys.platform == "win32":
+        try:
+            import subprocess
+
+            ps_cmd = (
+                "$files = Get-Clipboard -Format FileDropList; "
+                "if ($files) { $files | ForEach-Object { $_.FullName } } "
+                "else { Get-Clipboard -Raw }"
+            )
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            out = proc.stdout.strip()
+            if out:
+                lines = [line.strip().strip('"') for line in out.splitlines() if line.strip()]
+                for line in lines:
+                    if Path(line).exists():
+                        with contextlib.suppress(Exception):
+                            results.append(
+                                drop_file_to_pocket(
+                                    line, config_path=config_path, show_alert=False
+                                )
+                            )
+                if not results and out:
+                    cfg_file = find_bridge_config(config_path)
+                    cfg = BridgeConfig.load(cfg_file)
+                    p_dir = cfg.get_pocket_dir()
+                    p_dir.mkdir(parents=True, exist_ok=True)
+                    from datetime import datetime
+
+                    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    txt_file = p_dir / f"clipboard_note_{stamp}.txt"
+                    txt_file.write_text(out, encoding="utf-8")
+                    results.append(txt_file)
+        except Exception as e:
+            logger.error("[CLIPBOARD-FALLBACK] Сбой PowerShell: %s", e)
+
+    if results:
+        names = ", ".join(p.name for p in results)
+        logger.info("[CLIPBOARD-DROP] Скопировано в Карман: %s", names)
+        if show_alert:
+            show_windows_alert(
+                "Bridge Local - Буфер обмена",
+                f"Скопировано в Карман из буфера обмена:\n\n{names}",
+            )
+    else:
+        logger.warning("[CLIPBOARD-DROP] Буфер обмена пуст или не содержит файлов/текста.")
+        if show_alert:
+            show_windows_alert(
+                "Bridge Local - Буфер обмена",
+                "Буфер обмена пуст или не содержит доступных файлов/текста.",
+                is_error=True,
+            )
+
+    return results
 
 
 def main() -> None:

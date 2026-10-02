@@ -33,6 +33,9 @@ if not "%~1"=="" (
     if "%~1"=="9" goto :action_tray_menu
     if "%~1"=="10" goto :action_build
     if "%~1"=="11" goto :action_uninstall
+    if "%~1"=="12" goto :action_drop_clip
+    if /i "%~1"=="clip" goto :action_drop_clip
+    if /i "%~1"=="drop" goto :action_drop_clip
 )
 
 :menu
@@ -64,7 +67,7 @@ if not errorlevel 1 (
 :: Check Firewall Status
 netsh advfirewall firewall show rule name="Bridge Local Daemon (TCP-In)" >nul 2>&1
 if not errorlevel 1 (
-    echo  Firewall Port 9732 TCP:   [ALLOWED (OK)]
+    echo  Firewall Port 9732 TCP:   [ALLOWED OK]
 ) else (
     echo  Firewall Port 9732 TCP:   [NOT CONFIGURED]
 )
@@ -78,8 +81,8 @@ echo.
 echo   [2] INSTALL AS BACKGROUND WINDOWS SERVICE (SCM)
 echo       --^> Full auto-setup + agent runs silently in background on boot
 echo.
-echo   [3] Run Agent in Console (Live Monitor & interactive prompt)
-echo   [4] Network & Pocket Configuration Wizard (Port, Token, Pocket path)
+echo   [3] Run Agent in Console (Live Monitor and interactive prompt)
+echo   [4] Network and Pocket Configuration Wizard (Port, Token, Pocket path)
 echo   [5] Global Windows System Setup (PATH + BRIDGE_CONFIG + C:\BridgeLocal)
 echo   [6] Manage Windows Service (SCM: Start / Stop / Restart / Status)
 echo   [7] Configure Windows Firewall (Open port 9732 TCP)
@@ -87,6 +90,7 @@ echo   [8] Explorer Context Menu Integration ("Send to Pocket")
 echo   [9] Windows System Tray and Autostart (shell:startup)
 echo   [10] Rebuild Standalone Executable (bridge-agent.exe via PyInstaller)
 echo   [11] Uninstall and Clean Up (Service, Menu, Firewall, Autostart)
+echo   [12] Drop Clipboard to Pocket (send copied files or text to Pocket)
 echo.
 echo   [0] Exit
 echo.
@@ -105,6 +109,7 @@ if "%CHOICE%"=="8" goto :action_context_menu
 if "%CHOICE%"=="9" goto :action_tray_menu
 if "%CHOICE%"=="10" goto :action_build
 if "%CHOICE%"=="11" goto :action_uninstall
+if "%CHOICE%"=="12" goto :action_drop_clip
 if "%CHOICE%"=="0" exit /b 0
 
 echo [WARN] Invalid input, please try again.
@@ -120,14 +125,16 @@ echo.
 echo ==============================================================================
 echo   STEP 1/3: Configuring Windows Firewall (Port 9732 TCP)...
 echo ==============================================================================
-if "!IS_ADMIN!"=="1" (
-    call :sub_apply_firewall
-) else (
-    echo [INFO] Requesting Administrator privileges to open port 9732...
-    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall delete rule name=\"Bridge Local Daemon (TCP-In)\" >nul 2>&1 & netsh advfirewall firewall add rule name=\"Bridge Local Daemon (TCP-In)\" dir=in action=allow protocol=TCP localport=9732 profile=any & powershell -NoProfile -Command \"Set-NetConnectionProfile -InterfaceAlias ''Ethernet*'',''Wi-Fi*'' -NetworkCategory Private -ErrorAction SilentlyContinue\"' -Verb RunAs -Wait" 2>nul
-    echo [OK] Firewall rule applied.
-)
+if "!IS_ADMIN!"=="1" goto :qs_fw_admin
+echo [INFO] Requesting Administrator privileges to open port 9732...
+powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall delete rule name=\"Bridge Local Daemon (TCP-In)\" >nul 2>&1 & netsh advfirewall firewall add rule name=\"Bridge Local Daemon (TCP-In)\" dir=in action=allow protocol=TCP localport=9732 profile=any & powershell -NoProfile -Command \"Set-NetConnectionProfile -InterfaceAlias ''Ethernet*'',''Wi-Fi*'' -NetworkCategory Private -ErrorAction SilentlyContinue\"' -Verb RunAs -Wait" 2>nul
+echo [OK] Firewall rule applied.
+goto :qs_step2
 
+:qs_fw_admin
+call :sub_apply_firewall
+
+:qs_step2
 echo.
 echo ==============================================================================
 echo   STEP 2/3: Registering Explorer Context Menu ("Send to Pocket")...
@@ -199,7 +206,7 @@ echo ===========================================================================
 echo.
 echo   Current directory: %REPO_ROOT%
 echo.
-echo   [1] Add current directory (%REPO_ROOT%) to Machine PATH
+echo   [1] Add current directory to Machine PATH
 echo   [2] Set BRIDGE_CONFIG environment variable to %REPO_ROOT%bridge.toml
 echo   [3] Deploy standalone files to standard directory C:\BridgeLocal
 echo   [4] Complete global setup (1 + 2 + 3)
@@ -207,41 +214,47 @@ echo   [0] Back to main menu
 echo.
 set /p "GCHOICE=Select an option [0-4]: "
 if "%GCHOICE%"=="0" goto :menu
-
-if "!IS_ADMIN!"=="0" (
-    echo.
-    echo [INFO] Administrator rights required to update machine environment variables.
-    echo Requesting UAC elevation...
-    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\"\" 5' -Verb RunAs"
-    goto :menu
-)
-
-if "%GCHOICE%"=="1" (
-    call :sub_add_to_path "%REPO_ROOT%"
-    pause
-    goto :action_global_setup
-)
-if "%GCHOICE%"=="2" (
-    call :sub_set_bridge_config "%REPO_ROOT%bridge.toml"
-    pause
-    goto :action_global_setup
-)
-if "%GCHOICE%"=="3" (
-    call :sub_deploy_c_bridgelocal
-    pause
-    goto :action_global_setup
-)
-if "%GCHOICE%"=="4" (
-    call :sub_deploy_c_bridgelocal
-    call :sub_add_to_path "C:\BridgeLocal"
-    call :sub_set_bridge_config "C:\BridgeLocal\bridge.toml"
-    echo.
-    echo [OK] Complete global Windows setup finished!
-    echo The bridge-agent command is now accessible from any CMD or PowerShell prompt.
-    pause
-    goto :menu
-)
+if "%GCHOICE%"=="1" goto :gs_opt1
+if "%GCHOICE%"=="2" goto :gs_opt2
+if "%GCHOICE%"=="3" goto :gs_opt3
+if "%GCHOICE%"=="4" goto :gs_opt4
 goto :action_global_setup
+
+:gs_opt1
+if "!IS_ADMIN!"=="0" goto :gs_elevate
+call :sub_add_to_path "%REPO_ROOT%"
+pause
+goto :action_global_setup
+
+:gs_opt2
+if "!IS_ADMIN!"=="0" goto :gs_elevate
+call :sub_set_bridge_config "%REPO_ROOT%bridge.toml"
+pause
+goto :action_global_setup
+
+:gs_opt3
+if "!IS_ADMIN!"=="0" goto :gs_elevate
+call :sub_deploy_c_bridgelocal
+pause
+goto :action_global_setup
+
+:gs_opt4
+if "!IS_ADMIN!"=="0" goto :gs_elevate
+call :sub_deploy_c_bridgelocal
+call :sub_add_to_path "C:\BridgeLocal"
+call :sub_set_bridge_config "C:\BridgeLocal\bridge.toml"
+echo.
+echo [OK] Complete global Windows setup finished!
+echo The bridge-agent command is now accessible from any CMD or PowerShell prompt.
+pause
+goto :menu
+
+:gs_elevate
+echo.
+echo [INFO] Administrator rights required to update machine environment variables.
+echo Requesting UAC elevation...
+powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\"\" 5' -Verb RunAs"
+goto :menu
 
 
 :: ============================================================================
@@ -264,52 +277,62 @@ echo   [0] Back to main menu
 echo.
 set /p "SMCHOICE=Select an option [0-5]: "
 if "%SMCHOICE%"=="0" goto :menu
-
-if "!IS_ADMIN!"=="0" (
-    echo [INFO] Requesting Administrator rights to manage Windows Service...
-    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\"\" 6' -Verb RunAs"
-    goto :menu
-)
-
-if "%SMCHOICE%"=="1" (
-    call :sub_exec_agent service start
-    pause
-    goto :action_service_mgmt
-)
-if "%SMCHOICE%"=="2" (
-    call :sub_exec_agent service stop
-    pause
-    goto :action_service_mgmt
-)
-if "%SMCHOICE%"=="3" (
-    call :sub_exec_agent service restart
-    pause
-    goto :action_service_mgmt
-)
-if "%SMCHOICE%"=="4" (
-    call :sub_exec_agent service status
-    pause
-    goto :action_service_mgmt
-)
-if "%SMCHOICE%"=="5" (
-    call :sub_exec_agent service stop 2>nul
-    call :sub_exec_agent service remove
-    pause
-    goto :action_service_mgmt
-)
+if "%SMCHOICE%"=="1" goto :sm_start
+if "%SMCHOICE%"=="2" goto :sm_stop
+if "%SMCHOICE%"=="3" goto :sm_restart
+if "%SMCHOICE%"=="4" goto :sm_status
+if "%SMCHOICE%"=="5" goto :sm_remove
 goto :action_service_mgmt
+
+:sm_start
+if "!IS_ADMIN!"=="0" goto :sm_elevate
+call :sub_exec_agent service start
+pause
+goto :action_service_mgmt
+
+:sm_stop
+if "!IS_ADMIN!"=="0" goto :sm_elevate
+call :sub_exec_agent service stop
+pause
+goto :action_service_mgmt
+
+:sm_restart
+if "!IS_ADMIN!"=="0" goto :sm_elevate
+call :sub_exec_agent service restart
+pause
+goto :action_service_mgmt
+
+:sm_status
+call :sub_exec_agent service status
+pause
+goto :action_service_mgmt
+
+:sm_remove
+if "!IS_ADMIN!"=="0" goto :sm_elevate
+call :sub_exec_agent service stop 2>nul
+call :sub_exec_agent service remove
+pause
+goto :action_service_mgmt
+
+:sm_elevate
+echo [INFO] Requesting Administrator rights to manage Windows Service...
+powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\"\" 6' -Verb RunAs"
+goto :menu
 
 
 :: ============================================================================
 :: ACTION 7: Firewall Configuration
 :: ============================================================================
 :action_firewall
-if "!IS_ADMIN!"=="1" (
-    call :sub_apply_firewall
-) else (
-    echo [INFO] Requesting Administrator rights to configure Windows Firewall...
-    powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall delete rule name=\"Bridge Local Daemon (TCP-In)\" >nul 2>&1 & netsh advfirewall firewall add rule name=\"Bridge Local Daemon (TCP-In)\" dir=in action=allow protocol=TCP localport=9732 profile=any & powershell -NoProfile -Command \"Set-NetConnectionProfile -InterfaceAlias ''Ethernet*'',''Wi-Fi*'' -NetworkCategory Private -ErrorAction SilentlyContinue\" & pause' -Verb RunAs -Wait"
-)
+if "!IS_ADMIN!"=="1" goto :fw_admin
+echo [INFO] Requesting Administrator rights to configure Windows Firewall...
+powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall delete rule name=\"Bridge Local Daemon (TCP-In)\" >nul 2>&1 & netsh advfirewall firewall add rule name=\"Bridge Local Daemon (TCP-In)\" dir=in action=allow protocol=TCP localport=9732 profile=any & powershell -NoProfile -Command \"Set-NetConnectionProfile -InterfaceAlias ''Ethernet*'',''Wi-Fi*'' -NetworkCategory Private -ErrorAction SilentlyContinue\" & pause' -Verb RunAs -Wait"
+goto :fw_done
+
+:fw_admin
+call :sub_apply_firewall
+
+:fw_done
 pause
 goto :menu
 
@@ -329,7 +352,7 @@ goto :menu
 :action_tray_menu
 cls
 echo ==============================================================================
-echo               WINDOWS SYSTEM TRAY & AUTOSTART
+echo               WINDOWS SYSTEM TRAY AND AUTOSTART
 echo ==============================================================================
 echo.
 echo   [1] Start System Tray icon now (System Tray)
@@ -339,24 +362,26 @@ echo   [0] Back to main menu
 echo.
 set /p "TRCHOICE=Select an option [0-3]: "
 if "%TRCHOICE%"=="0" goto :menu
+if "%TRCHOICE%"=="1" goto :tr_run_now
+if "%TRCHOICE%"=="2" goto :tr_add_startup
+if "%TRCHOICE%"=="3" goto :tr_del_startup
+goto :action_tray_menu
 
-if "%TRCHOICE%"=="1" (
-    echo [INFO] Starting Bridge Local System Tray...
-    start "" powershell -NoProfile -WindowStyle Hidden -Command "& '%REPO_ROOT%run_tray.bat'"
-    goto :menu
-)
-if "%TRCHOICE%"=="2" (
-    set "STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
-    powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(\"$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\BridgeLocalTray.lnk\"); $s.TargetPath = \"wscript.exe\"; $s.WorkingDirectory = \"%REPO_ROOT%\"; $s.Arguments = \"//nologo `\"%REPO_ROOT%scripts\windows\run_hidden.vbs`\" `\"%REPO_ROOT%run_tray.bat`\"\"; if (-not (Test-Path \"%REPO_ROOT%scripts\windows\run_hidden.vbs\")) { $s.TargetPath = \"%REPO_ROOT%run_tray.bat\" }; $s.IconLocation = \"shell32.dll,14\"; $s.Save(); Write-Host '[OK] Startup shortcut created in shell:startup'"
-    pause
-    goto :action_tray_menu
-)
-if "%TRCHOICE%"=="3" (
-    del /f /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\BridgeLocalTray.lnk" 2>nul
-    echo [OK] Startup shortcut removed from Windows Startup.
-    pause
-    goto :action_tray_menu
-)
+:tr_run_now
+echo [INFO] Starting Bridge Local System Tray...
+start "" powershell -NoProfile -WindowStyle Hidden -Command "& '%REPO_ROOT%run_tray.bat'"
+goto :menu
+
+:tr_add_startup
+set "STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(\"$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\BridgeLocalTray.lnk\"); $s.TargetPath = \"wscript.exe\"; $s.WorkingDirectory = \"%REPO_ROOT%\"; $s.Arguments = \"//nologo `\"%REPO_ROOT%scripts\windows\run_hidden.vbs`\" `\"%REPO_ROOT%run_tray.bat`\"\"; if (-not (Test-Path \"%REPO_ROOT%scripts\windows\run_hidden.vbs\")) { $s.TargetPath = \"%REPO_ROOT%run_tray.bat\" }; $s.IconLocation = \"shell32.dll,14\"; $s.Save(); Write-Host '[OK] Startup shortcut created in shell:startup'"
+pause
+goto :action_tray_menu
+
+:tr_del_startup
+del /f /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\BridgeLocalTray.lnk" 2>nul
+echo [OK] Startup shortcut removed from Windows Startup.
+pause
 goto :action_tray_menu
 
 
@@ -393,6 +418,17 @@ del /f /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\BridgeLocalTr
 
 echo.
 echo [OK] Service, Context Menu, Firewall rule, and Startup shortcut successfully removed!
+pause
+goto :menu
+
+
+:: ============================================================================
+:: ACTION 12: Drop Clipboard to Pocket
+:: ============================================================================
+:action_drop_clip
+echo.
+echo [INFO] Dropping clipboard contents (files, images, or text) to Pocket...
+call :sub_exec_agent drop --clipboard
 pause
 goto :menu
 
@@ -441,19 +477,10 @@ echo [OK] Files deployed to C:\BridgeLocal.
 goto :eof
 
 :sub_exec_agent
-if /i "%~1"=="tray" (
-    if exist "%REPO_ROOT%dist\bridge-agent.exe" (
-        "%REPO_ROOT%dist\bridge-agent.exe" --help 2>&1 | findstr /i "tray" >nul
-        if not errorlevel 1 (
-            "%REPO_ROOT%dist\bridge-agent.exe" %*
-            goto :eof
-        )
-    )
-) else (
-    if exist "%REPO_ROOT%dist\bridge-agent.exe" (
-        "%REPO_ROOT%dist\bridge-agent.exe" %*
-        goto :eof
-    )
+if /i "%~1"=="tray" goto :exec_tray
+if exist "%REPO_ROOT%dist\bridge-agent.exe" (
+    "%REPO_ROOT%dist\bridge-agent.exe" %*
+    goto :eof
 )
 if exist "%REPO_ROOT%bridge-agent.exe" (
     "%REPO_ROOT%bridge-agent.exe" %*
@@ -469,6 +496,21 @@ if exist "%REPO_ROOT%.venv\Scripts\python.exe" (
 )
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" -m bridge_agent_win.cli %*
+    goto :eof
+)
+python -m bridge_agent_win.cli %*
+goto :eof
+
+:exec_tray
+if exist "%REPO_ROOT%dist\bridge-agent.exe" (
+    "%REPO_ROOT%dist\bridge-agent.exe" --help 2>&1 | findstr /i "tray" >nul
+    if not errorlevel 1 (
+        "%REPO_ROOT%dist\bridge-agent.exe" %*
+        goto :eof
+    )
+)
+if exist "%REPO_ROOT%.venv\Scripts\python.exe" (
+    "%REPO_ROOT%.venv\Scripts\python.exe" -m bridge_agent_win.cli %*
     goto :eof
 )
 python -m bridge_agent_win.cli %*

@@ -143,7 +143,7 @@ def setup_interactive() -> None:
             print(f"  1. На Linux введите: bridge connect {ips[0]}:{cfg.connection.port}")
             print(f"     или в TUI на [F7:CONNECT] введите: {ips[0]}:{cfg.connection.port}")
         print("  2. На Windows запустите run_agent.bat или install_service.bat")
-    except KeyboardInterrupt, EOFError:
+    except (KeyboardInterrupt, EOFError):
         print("\n[INFO] Настройка отменена пользователем.")
 
 
@@ -207,12 +207,17 @@ def main(argv: list[str] | None = None) -> None:
         except Exception:
             pass
 
-    if not args or args[0] in ("-h", "--help", "help"):
+    if not args:
+        # При запуске двойным кликом в проводнике или без параметров запускаем агент в консоли
+        main_standalone()
+        return
+
+    if args[0] in ("-h", "--help", "help"):
         print("bridge-agent - Windows Agent Management CLI")
         print("\nКоманды:")
+        print("  run                     Запуск фонового демона службы Windows (консольный режим)")
         print("  setup                   Мастер быстрой настройки (IP, порт, токен)")
         print("  config [show|opts]      Просмотр и изменение сетевых параметров")
-        print("  run                     Запуск фонового демона службы Windows (консольный режим)")
         print("  service-run             Запуск в режиме диспетчера системной службы SCM")
         print("  service [cmd]           Управление службой SCM (install/start/stop/remove)")
         print("  drop <file>             Отправить файл в локальный Карман")
@@ -259,17 +264,27 @@ def main(argv: list[str] | None = None) -> None:
             cfg = BridgeConfig.load()
             print(f"Каталог кармана: {cfg.get_pocket_dir()}")
             return
-    elif cmd == "drop":
-        if len(args) < 2:
-            print("[ERROR] Укажите путь к файлу: bridge-agent drop <file>")
-            sys.exit(1)
-        target = args[1]
+    elif cmd in ("drop", "clip", "drop-clipboard"):
         is_tty = hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
         show_alert = sys.platform == "win32" and not is_tty
         if "--alert" in args:
             show_alert = True
         if "--quiet" in args or "--no-alert" in args:
             show_alert = False
+
+        # Если файл не указан или передан флаг --clipboard: берем из буфера обмена!
+        if len(args) < 2 or args[1] in ("--clipboard", "-c", "clipboard"):
+            from bridge_agent_win.context_menu import drop_clipboard_to_pocket
+
+            dropped = drop_clipboard_to_pocket(show_alert=show_alert)
+            if dropped:
+                names = ", ".join(p.name for p in dropped)
+                print(f"[OK] Из буфера обмена скопировано в Карман: {names}")
+            else:
+                print("[WARN] Буфер обмена пуст или не содержит доступных файлов/текста.")
+            return
+
+        target = args[1]
         try:
             if show_alert:
                 dest = drop_file_to_pocket(target, show_alert=True)

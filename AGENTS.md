@@ -58,3 +58,9 @@
 ## 9. Git & Release Invariant: Explicit User Approval Only
 - **Zero Autonomous Commits, Pushes or Releases:** Agents and subagents must NEVER create git commits, push to remote repositories, create git tags, or publish releases autonomously without explicit user approval or a direct user order.
 - **Strict User Authorization Gate:** All code modifications, refactorings, and test creations during a phase remain in the local working tree until the user explicitly commands or confirms a commit and push. No background task or subagent may run `git commit` or `git push` on its own initiative.
+
+## 10. Testing & Verification Invariant: Explicit User Command Only & No Git CI as Tester
+- **Zero Autonomous Test Execution:** Agents and subagents must NEVER launch automated test suites (e.g. `pytest`, unit/integration test runners) autonomously or proactively without an explicit, direct command from the user.
+- **No Git as Test Runner:** Git (or pushing to remote / CI) must NEVER be used as a test execution environment or verification mechanism.
+- **Manual & User-Directed Builds:** Binaries, agents, and packages are built and verified manually and locally on the respective machines (Linux / Windows) under direct operator supervision, never delegated to automated remote git workflows.
+

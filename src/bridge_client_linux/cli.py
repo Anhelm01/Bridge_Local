@@ -400,6 +400,12 @@ def cmd_pocket_sync(
     direction: str = typer.Option(
         "both", "--direction", "-d", help="Направление: both | push | pull"
     ),
+    watch: bool = typer.Option(
+        False, "--watch", "-w", help="Режим непрерывного наблюдения и автосинхронизации"
+    ),
+    interval: float = typer.Option(
+        2.5, "--interval", "-i", help="Интервал опроса в режиме --watch (секунды)"
+    ),
     json_mode: bool = typer.Option(False, "--json", "-j", help="Вывод в формате JSON"),
     config: Path | None = typer.Option(None, "--config", "-c", help="Путь к bridge.toml"),
     host: str | None = typer.Option(None, "--host", "-h", help="Хост"),
@@ -413,6 +419,39 @@ def cmd_pocket_sync(
     async def _action() -> Any:
         async with client:
             return await client.pocket_sync(direction=direction)
+
+    if watch:
+        console.print(
+            f"[bold {OFFICIAL_THEME.blue}][SYNC-WATCH] Автоматическая синхронизация кармана "
+            f"запущена (интервал {interval}с)...[/]"
+        )
+        console.print("[dim]Для остановки нажмите Ctrl+C[/]\n")
+        import time
+        from datetime import datetime
+
+        while True:
+            try:
+                summary = _run(_action())
+                if summary.pulled or summary.pushed or summary.errors:
+                    now_str = datetime.now().strftime("%H:%M:%S")
+                    console.print(
+                        f"[{now_str}] [bold {OFFICIAL_THEME.green}]Событие кармана:[/] "
+                        f"Pulled: [bold {OFFICIAL_THEME.blue}]{len(summary.pulled)}[/], "
+                        f"Pushed: [bold {OFFICIAL_THEME.amber}]{len(summary.pushed)}[/]"
+                    )
+                    for p in summary.pulled:
+                        console.print(f"  ↓ Получен: [cyan]{p}[/]")
+                    for p in summary.pushed:
+                        console.print(f"  ↑ Отправлен: [green]{p}[/]")
+            except KeyboardInterrupt:
+                console.print(
+                    f"\n[bold {OFFICIAL_THEME.amber}][SYNC-WATCH] Синхронизация остановлена.[/]"
+                )
+                break
+            except Exception:
+                pass
+            time.sleep(interval)
+        return
 
     try:
         summary = _run(_action())
