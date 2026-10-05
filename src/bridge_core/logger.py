@@ -175,8 +175,10 @@ def setup_logging(config: LoggingConfig | None = None) -> None:
     cfg = config or LoggingConfig()
 
     level_name = cfg.level.upper()
-    if not cfg.dev_mode and level_name == "TRACE":
+    if not cfg.dev_mode and level_name in ("TRACE", "DEBUG"):
         target_level = logging.INFO
+    elif cfg.dev_mode and level_name == "INFO":
+        target_level = logging.DEBUG
     elif level_name == "TRACE":
         target_level = TRACE_LEVEL_NUM
     else:

@@ -16,7 +16,7 @@ import tomllib
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +175,10 @@ class BridgeConfig(BaseModel):
     Загружается из bridge.toml и валидируется через Pydantic.
     """
 
+    dev_mode: bool = Field(
+        default=False,
+        description="Глобальный переключатель режима разработчика (Hyper-Logging)",
+    )
     node: NodeConfig = Field(default_factory=NodeConfig)
     connection: ConnectionConfig = Field(default_factory=ConnectionConfig)
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
@@ -184,6 +188,37 @@ class BridgeConfig(BaseModel):
 
     # Путь к файлу конфига, из которого загрузили (не сериализуется)
     _config_path: ClassVar[Path | None] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_dev_mode(cls, data: object) -> object:
+        if isinstance(data, dict):
+            # 1. Проверяем наличие dev_mode на верхнем уровне
+            top_dev = data.get("dev_mode")
+            # 2. Проверяем секцию [dev]
+            dev_sec = data.get("dev")
+            if isinstance(dev_sec, dict) and top_dev is None:
+                top_dev = dev_sec.get("dev_mode", dev_sec.get("enabled"))
+
+            # 3. Синхронизируем с [logging]
+            log_sec = data.get("logging")
+            if not isinstance(log_sec, dict):
+                log_sec = {}
+                data["logging"] = log_sec
+
+            log_dev = log_sec.get("dev_mode")
+            if top_dev is not None:
+                val = bool(top_dev)
+                data["dev_mode"] = val
+                log_sec["dev_mode"] = val
+            elif log_dev is not None:
+                val = bool(log_dev)
+                data["dev_mode"] = val
+                log_sec["dev_mode"] = val
+            else:
+                data["dev_mode"] = False
+                log_sec["dev_mode"] = False
+        return data
 
     @classmethod
     def load(cls, path: Path | None = None) -> BridgeConfig:
@@ -297,9 +332,21 @@ class BridgeConfig(BaseModel):
         Не использует внешних зависимостей — простой ручной сериализатор
         достаточен для плоских моделей Pydantic.
         """
-        lines: list[str] = []
+        lines: list[str] = [
+            "# ==============================================================================",
+            "# BRIDGE LOCAL - CONFIGURATION",
+            "# ==============================================================================",
+            "",
+            "# Режим разработчика (Hyper-Logging):",
+            "# true  - подробная трассировка (микросекунды, TRACE/DEBUG, пакеты, сокеты)",
+            "# false - тихий релизный режим (только ключевые события, INFO/ERROR)",
+            f"dev_mode = {'true' if self.logging.dev_mode else 'false'}",
+            "",
+        ]
         data = self.model_dump()
         for section_name, section_data in data.items():
+            if section_name == "dev_mode":
+                continue
             lines.append(f"[{section_name}]")
             if isinstance(section_data, dict):
                 for key, value in section_data.items():

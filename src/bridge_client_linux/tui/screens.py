@@ -96,7 +96,7 @@ def get_live_context(custom_data: dict[str, Any] | None = None) -> dict[str, Any
 
     tgt_node = d.get("node", {}).get("target") or "WIN-PC"
     tgt_host = (
-        d.get("tgt_host") or d.get("node", {}).get("host") or cfg.connection.host or "192.168.100.2"
+        d.get("tgt_host") or d.get("node", {}).get("host") or cfg.connection.host or "127.0.0.1"
     )
     tgt_port = d.get("tgt_port") or d.get("node", {}).get("port") or cfg.connection.port or 9732
     tgt_address = d.get("tgt_address") or f"{tgt_host}:{tgt_port}"
@@ -303,8 +303,9 @@ def render_welcome_screen(
 
     sec_line = "HMAC-SHA256" if ctx["psk_set"] else "Без токена (Open)"
     notes_line = f"{ctx['notes_count']} записей [{ctx['notes_unread']} новых]"
+    user_name = os.getenv("USER") or "operator"
 
-    info = f"""[bold {w}]anhelm@{ctx["src_node"]}[/]
+    info = f"""[bold {w}]{user_name}@{ctx["src_node"]}[/]
 [dim {s}]─────────────────────────────────────────────────────────────[/]
 [bold {s}]Host OS:[/]        Linux x86_64
 [bold {b}]Local Node:[/]     {ctx["src_display"]} ({ctx["src_ip"]})

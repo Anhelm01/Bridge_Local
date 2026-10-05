@@ -102,7 +102,7 @@ def setup_interactive() -> None:
     cfg = BridgeConfig.load()
     cur_port = cfg.connection.port
     cur_host = cfg.connection.host
-    cur_token = cfg.connection.psk_token or "BridgeLocalSecretKey_Anhelm_2026_Secure"
+    cur_token = cfg.connection.psk_token or "BridgeLocalSecretKey_CHANGE_ME"
     cur_pocket = cfg.pocket.path
     tok_preview = f"{cur_token[:8]}..." if cur_token else "(отключен)"
 

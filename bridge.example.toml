@@ -1,0 +1,49 @@
+# ==============================================================================
+# BRIDGE LOCAL - CONFIGURATION TEMPLATE (bridge.example.toml)
+# ==============================================================================
+# Скопируйте этот файл в 'bridge.toml' и укажите параметры вашей сети.
+# Файл 'bridge.toml' исключен из Git (.gitignore) для защиты ваших приватных данных.
+# ==============================================================================
+
+# Режим разработчика (Hyper-Logging):
+# true  - подробная трассировка (пакеты, миллисекунды, TRACE/DEBUG, сокеты, PID)
+# false - чистый релизный режим (только ключевые события, INFO/ERROR)
+dev_mode = false
+
+[node]
+name = "workstation-node"
+display_name = "Workstation"
+
+[connection]
+# IP-адрес или hostname удаленного узла (для клиента) / 0.0.0.0 (для агента)
+host = "192.168.1.150"
+port = 9732
+timeout_sec = 5.0
+tls_cert_path = ""
+tls_key_path = ""
+# Секретный pre-shared key (должен совпадать на всех связанных машинах)
+psk_token = "REPLACE_WITH_YOUR_SECRET_TOKEN_32_CHARS"
+
+[heartbeat]
+interval_sec = 2.0
+timeout_sec = 1.5
+max_missed = 3
+reconnect_delay_sec = 5.0
+
+[pocket]
+path = "./pocket"
+logs_subdir = "logs"
+sync_watch = true
+max_chunk_size = 65536
+log_max_days = 30
+
+[exec]
+default_timeout_sec = 30
+run_as_admin = true
+force_utf8 = true
+
+[logging]
+level = "INFO"
+dev_mode = false
+console_output = true
+file_output = ""

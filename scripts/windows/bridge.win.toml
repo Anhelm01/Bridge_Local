@@ -1,4 +1,11 @@
-# Конфигурация Bridge Local (Windows Agent)
+# ==============================================================================
+# BRIDGE LOCAL - WINDOWS AGENT CONFIGURATION (bridge.win.toml)
+# ==============================================================================
+# Режим разработчика (Hyper-Logging):
+# true  - подробная трассировка (пакеты, миллисекунды, TRACE/DEBUG, сокеты, PID)
+# false - тихий релизный режим (только ключевые события, INFO/ERROR)
+dev_mode = false
+
 [node]
 name = "win-pc"
 display_name = "Windows Rig"
@@ -7,7 +14,7 @@ display_name = "Windows Rig"
 host = "0.0.0.0"
 port = 9732
 timeout_sec = 5.0
-psk_token = "BridgeLocalSecretKey_Anhelm_2026_Secure"
+psk_token = "REPLACE_WITH_YOUR_SECRET_TOKEN_32_CHARS"
 
 [heartbeat]
 interval_sec = 2.0
@@ -25,6 +32,7 @@ run_as_admin = true
 force_utf8 = true
 
 [logging]
-level = "TRACE"
-dev_mode = true
+level = "INFO"
+dev_mode = false
 console_output = true
+file_output = ""

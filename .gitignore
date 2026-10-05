@@ -16,3 +16,8 @@ scenarios/
 # Pocket storage runtime files
 pocket/
 *.log
+
+# Local personal configuration files (protect private IPs and tokens from git)
+bridge.toml
+bridge.win.toml
+*.local.toml

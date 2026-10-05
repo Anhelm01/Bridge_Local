@@ -7,12 +7,23 @@ title Bridge Local - Windows Control Center
 set "SCRIPT_DIR=%~dp0"
 if exist "%SCRIPT_DIR%..\..\bridge.toml" (
     set "REPO_ROOT=%SCRIPT_DIR%..\..\"
+) else if exist "%SCRIPT_DIR%..\..\bridge.example.toml" (
+    set "REPO_ROOT=%SCRIPT_DIR%..\..\"
 ) else if exist "%SCRIPT_DIR%..\bridge.toml" (
+    set "REPO_ROOT=%SCRIPT_DIR%..\"
+) else if exist "%SCRIPT_DIR%..\bridge.example.toml" (
     set "REPO_ROOT=%SCRIPT_DIR%..\"
 ) else (
     set "REPO_ROOT=%SCRIPT_DIR%"
 )
 cd /d "%REPO_ROOT%"
+
+:: Auto-create bridge.toml from template if missing
+if not exist "%REPO_ROOT%bridge.toml" (
+    if exist "%REPO_ROOT%bridge.example.toml" (
+        copy /y "%REPO_ROOT%bridge.example.toml" "%REPO_ROOT%bridge.toml" >nul 2>&1
+    )
+)
 set "PYTHONPATH=%REPO_ROOT%src;%PYTHONPATH%"
 
 :: Check Administrator Privileges

@@ -343,7 +343,7 @@ def test_tui_connect_mode_parsing_and_client_sync() -> None:
     mock_client.update_target = MagicMock()
 
     state: dict[str, Any] = {
-        "tgt_host": "192.168.100.2",
+        "tgt_host": "192.168.1.150",
         "tgt_port": 9732,
         "is_online": False,
         "status_msg": "",

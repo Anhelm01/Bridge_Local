@@ -10,8 +10,10 @@ if exist "%SCRIPT_DIR%src\bridge_agent_win" (
     set "REPO_ROOT=%SCRIPT_DIR%"
 ) else if exist "%SCRIPT_DIR%..\src\bridge_agent_win" (
     set "REPO_ROOT=%SCRIPT_DIR%..\"
+) else if exist "%SCRIPT_DIR%..\..\src\bridge_agent_win" (
+    set "REPO_ROOT=%SCRIPT_DIR%..\..\"
 ) else (
-    set "REPO_ROOT=D:\progs\Bridge_Local-master\"
+    set "REPO_ROOT=%SCRIPT_DIR%"
 )
 
 cd /d "%REPO_ROOT%"

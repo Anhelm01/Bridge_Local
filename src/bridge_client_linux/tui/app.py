@@ -432,7 +432,7 @@ def dispatch_tui_action(
             cmd_arg = cmd[5:].strip()
             dispatch_tui_action("EXEC", cmd_arg, state, client)
         elif cmd in ("refresh", "r"):
-            tgt_host = state.get("tgt_host", "192.168.100.2")
+            tgt_host = state.get("tgt_host", "127.0.0.1")
             tgt_port = state.get("tgt_port", 9732)
             is_online, latency = probe_target_socket(tgt_host, tgt_port, timeout_sec=0.35)
             state["is_online"] = is_online
@@ -608,7 +608,7 @@ def run_interactive_tui(
         tgt_host = cfg.connection.host
         tgt_port = cfg.connection.port
     except Exception:
-        tgt_host = "192.168.100.2"
+        tgt_host = "127.0.0.1"
         tgt_port = 9732
 
     state["tgt_host"] = tgt_host

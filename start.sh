@@ -10,6 +10,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}"
 cd "${REPO_ROOT}"
 
+# Автоматическое создание bridge.toml из bridge.example.toml при первом запуске
+if [[ ! -f "${REPO_ROOT}/bridge.toml" && -f "${REPO_ROOT}/bridge.example.toml" ]]; then
+    cp "${REPO_ROOT}/bridge.example.toml" "${REPO_ROOT}/bridge.toml"
+fi
+
 # Цветовая палитра терминала (ANSI 256 / TrueColor)
 C_RESET="\033[0m"
 C_BOLD="\033[1m"
@@ -55,10 +60,10 @@ try:
     p_pocket = str(cfg.get_pocket_dir())
     print(f'{p_path}|{p_host}|{p_port}|{p_tok}|{p_pocket}')
 except Exception:
-    print('bridge.toml|192.168.100.2|9732||./pocket')
+    print('bridge.toml|127.0.0.1|9732||./pocket')
 " 2>/dev/null
     else
-        echo "bridge.toml|192.168.100.2|9732||./pocket"
+        echo "bridge.toml|127.0.0.1|9732||./pocket"
     fi
 }
 
