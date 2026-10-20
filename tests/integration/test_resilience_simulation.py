@@ -288,7 +288,12 @@ class TestResumableTransferContract:
         server_part = server_pocket / ".resumable_push.bin.part"
         server_part.write_bytes(full_payload[: chunk_size * 2])
 
-        client = BridgeClient(host="127.0.0.1", port=port)
+        cfg = BridgeConfig(
+            connection=ConnectionConfig(host="127.0.0.1", port=port),
+            pocket=PocketConfig(path=str(client_pocket)),
+            logging=LoggingConfig(dev_mode=True),
+        )
+        client = BridgeClient(config=cfg)
         await client.connect()
 
         try:

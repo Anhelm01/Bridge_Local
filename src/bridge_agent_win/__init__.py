@@ -20,7 +20,7 @@ from bridge_agent_win.process_killer import kill_process_tree  # noqa: E402
 from bridge_agent_win.service import WindowsBridgeService, main_standalone  # noqa: E402
 from bridge_agent_win.tray import BridgeTrayIcon, TrayAgentStatus  # noqa: E402
 
-__version__ = "0.1.0-dev"
+__version__ = "0.3.0"
 
 __all__ = [
     "BridgeTrayIcon",

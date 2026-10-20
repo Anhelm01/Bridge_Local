@@ -15,6 +15,7 @@ import logging
 import os
 import secrets
 import ssl
+import struct
 import time
 from pathlib import Path
 
@@ -224,7 +225,164 @@ def create_client_ssl_context(
         ctx.load_verify_locations(cafile=str(ca_cert_path))
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_REQUIRED
-    else:
-        ctx.load_default_certs()
-
     return ctx
+
+
+# ---------------------------------------------------------------------------
+# AEAD End-to-End Encryption & HKDF Key Derivation (Section 5)
+# ---------------------------------------------------------------------------
+
+HKDF_AEAD_SALT = b"BridgeLocal_v0.2.0_AEAD_Salt"
+HKDF_INFO_CLIENT_TO_SERVER = b"bridge_client_to_server_key"
+HKDF_INFO_SERVER_TO_CLIENT = b"bridge_server_to_client_key"
+
+
+def derive_hkdf_keys(psk_token: str) -> tuple[bytes, bytes]:
+    """
+    Генерирует криптографические суб-ключи шифрования для обоих направлений
+    на основе общего секрета PSK (Pre-Shared Key) по стандарту HKDF (RFC 5869).
+
+    Returns:
+        Кортеж (client_key, server_key) по 32 байта (256 бит) каждый.
+    """
+    ikm = psk_token.encode("utf-8") if isinstance(psk_token, str) else psk_token
+
+    def _hkdf_expand(salt: bytes, info: bytes, length: int = 32) -> bytes:
+        # 1. HKDF-Extract
+        prk = hmac.new(salt, ikm, hashlib.sha256).digest()
+        # 2. HKDF-Expand
+        t = b""
+        okm = b""
+        i = 1
+        while len(okm) < length:
+            t = hmac.new(prk, t + info + bytes([i]), hashlib.sha256).digest()
+            okm += t
+            i += 1
+        return okm[:length]
+
+    client_key = _hkdf_expand(HKDF_AEAD_SALT, HKDF_INFO_CLIENT_TO_SERVER, 32)
+    server_key = _hkdf_expand(HKDF_AEAD_SALT, HKDF_INFO_SERVER_TO_CLIENT, 32)
+    return client_key, server_key
+
+
+class AeadFrameCipher:
+    """
+    Двунаправленный криптографический контекст для защиты фреймов протокола.
+
+    Реализует:
+      - Сквозное AEAD шифрование (AES-256-GCM) полезной нагрузки.
+      - Аутентификацию заголовка (AAD: MAGIC + LEN + SEQ).
+      - Защиту от повтора (Replay Attack) и перестановок пакетов через
+        монотонные 64-битные счётчики последовательности (Sequence Numbers).
+      - Изоляцию ключей отправки и приёма (разные суб-ключи для исключения reflection атак).
+    """
+
+    def __init__(
+        self,
+        send_key: bytes,
+        recv_key: bytes,
+        is_client: bool = True,
+    ) -> None:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        self.is_client = is_client
+        self._send_key = send_key
+        self._recv_key = recv_key
+        self._send_cipher = AESGCM(send_key)
+        self._recv_cipher = AESGCM(recv_key)
+
+        self.send_seq: int = 0
+        self.last_recv_seq: int = -1
+
+    @classmethod
+    def for_client(cls, psk_token: str) -> AeadFrameCipher:
+        """Создаёт контекст шифрования для клиентской стороны."""
+        c_key, s_key = derive_hkdf_keys(psk_token)
+        return cls(send_key=c_key, recv_key=s_key, is_client=True)
+
+    @classmethod
+    def for_server(cls, psk_token: str) -> AeadFrameCipher:
+        """Создаёт контекст шифрования для серверной стороны."""
+        c_key, s_key = derive_hkdf_keys(psk_token)
+        return cls(send_key=s_key, recv_key=c_key, is_client=False)
+
+    def encrypt_frame(self, payload: bytes | str) -> bytes:
+        """
+        Шифрует payload и упаковывает в защищённый бинарный фрейм 'BE'.
+
+        Формат:
+          [0..1] MAGIC: 'BE' (0x42 0x45)
+          [2..5] LEN: uint32 Big-Endian (8 + 12 + len(payload) + 16)
+          [6..13] SEQ: uint64 Big-Endian
+          [14..25] NONCE: 12 байт (4b random + 8b seq)
+          [26..] CIPHERTEXT + TAG (AES-256-GCM)
+        """
+        raw_bytes = payload.encode("utf-8") if isinstance(payload, str) else payload
+
+        seq = self.send_seq
+        self.send_seq += 1
+
+        # Nonce = 4 случайных байта + 8 байт счётчика
+        nonce = secrets.token_bytes(4) + struct.pack("!Q", seq)
+
+        # Длина тела фрейма (SEQ + NONCE + CIPHERTEXT + TAG)
+        body_len = 8 + 12 + len(raw_bytes) + 16
+        header = b"\x42\x45" + struct.pack("!I", body_len)
+
+        # Дополнительные аутентифицированные данные (AAD): header + seq
+        aad = header + struct.pack("!Q", seq)
+
+        ciphertext = self._send_cipher.encrypt(nonce, raw_bytes, aad)
+
+        return header + struct.pack("!Q", seq) + nonce + ciphertext
+
+    def decrypt_frame(self, header: bytes, body: bytes) -> bytes:
+        """
+        Проверяет и расшифровывает полученный 'BE' фрейм.
+
+        Args:
+            header: 6 байт заголовка (MAGIC + LEN).
+            body: Тело фрейма длиной LEN.
+
+        Returns:
+            Расшифрованный исходный payload в байтах.
+
+        Raises:
+            TokenReplayError: Если нарушен порядок или обнаружен повторный пакет.
+            AuthenticationError: Если подпись AEAD или контрольная сумма не совпала.
+        """
+        from cryptography.exceptions import InvalidTag
+
+        if len(body) < 36:  # 8 (SEQ) + 12 (NONCE) + 16 (TAG)
+            raise AuthenticationError(
+                "Повреждённый AEAD-фрейм: длина меньше минимального размера 36 байт"
+            )
+
+        seq = struct.unpack("!Q", body[:8])[0]
+        if seq <= self.last_recv_seq:
+            logger.error(
+                "[AEAD-REPLAY] Обнаружена повторная передача пакета: seq=%d <= last=%d",
+                seq,
+                self.last_recv_seq,
+            )
+            raise TokenReplayError(
+                f"Replay-атака или нарушение порядка пакетов: seq {seq} <= {self.last_recv_seq}"
+            )
+
+        nonce = body[8:20]
+        ciphertext = body[20:]
+
+        aad = header + body[:8]
+
+        try:
+            plaintext = self._recv_cipher.decrypt(nonce, ciphertext, aad)
+        except InvalidTag as e:
+            logger.error(
+                "[AEAD-AUTH-FAILED] Ошибка аутентификации AEAD тега! Данные подменены или неверный PSK."
+            )
+            raise AuthenticationError(
+                "Сбой верификации AEAD: неверный ключ PSK или подмена пакета (MiTM)"
+            ) from e
+
+        self.last_recv_seq = seq
+        return plaintext

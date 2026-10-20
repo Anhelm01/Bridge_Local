@@ -176,7 +176,7 @@ class BridgeConfig(BaseModel):
     """
 
     dev_mode: bool = Field(
-        default=False,
+        default=True,
         description="Глобальный переключатель режима разработчика (Hyper-Logging)",
     )
     node: NodeConfig = Field(default_factory=NodeConfig)
@@ -216,8 +216,8 @@ class BridgeConfig(BaseModel):
                 data["dev_mode"] = val
                 log_sec["dev_mode"] = val
             else:
-                data["dev_mode"] = False
-                log_sec["dev_mode"] = False
+                data["dev_mode"] = True
+                log_sec["dev_mode"] = True
         return data
 
     @classmethod

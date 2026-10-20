@@ -116,7 +116,7 @@ class AgentConsoleMonitor:
             self.print_line(f"[{now}] [NOTE] Записка от {src}:")
             # Отступ для содержимого записки
             for line in text.splitlines():
-                self.print_line(f"         \"{line}\"")
+                self.print_line(f'         "{line}"')
             self.print_line()
 
         elif event_type == "file_received":
@@ -125,7 +125,7 @@ class AgentConsoleMonitor:
             client_ip = data.get("client_ip", "")
             size_str = format_bytes(bytes_cnt)
             self.print_line(
-                f"[{now}] [POCKET] [ВХОДЯЩИЙ] Файл: \"{path}\" ({size_str}) "
+                f'[{now}] [POCKET] [ВХОДЯЩИЙ] Файл: "{path}" ({size_str}) '
                 f"от {client_ip} ──► Сохранен [OK]"
             )
 
@@ -135,8 +135,7 @@ class AgentConsoleMonitor:
             client_ip = data.get("client_ip", "")
             size_str = format_bytes(total_size)
             self.print_line(
-                f"[{now}] [POCKET] [ИСХОДЯЩИЙ] Файл: \"{path}\" ({size_str}) "
-                f"передан {client_ip} [OK]"
+                f'[{now}] [POCKET] [ИСХОДЯЩИЙ] Файл: "{path}" ({size_str}) передан {client_ip} [OK]'
             )
 
         elif event_type == "exec_completed":
@@ -226,7 +225,7 @@ class AgentConsoleMonitor:
                     status_val = n.status.value if hasattr(n.status, "value") else str(n.status)
                     read_str = "Прочитана" if status_val == "read" else "Новая"
                     self.print_line(f"  [{dt}] {author} ({read_str}):")
-                    self.print_line(f"    \"{n.text}\"")
+                    self.print_line(f'    "{n.text}"')
             self.print_line("---------------------------\n")
 
         elif cmd == "pocket":

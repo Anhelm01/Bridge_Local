@@ -21,7 +21,7 @@ from bridge_client_linux.exceptions import (
 )
 from bridge_client_linux.exit_codes import ExitCode
 
-__version__ = "0.1.0-dev"
+__version__ = "0.3.0"
 
 __all__ = [
     "BridgeAuthError",

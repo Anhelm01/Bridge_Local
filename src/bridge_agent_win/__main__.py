@@ -21,4 +21,6 @@ if sys.platform == "win32":
 from bridge_agent_win.cli import main  # noqa: E402
 
 if __name__ == "__main__":
+    if len(sys.argv) == 1 and Path(sys.argv[0]).stem.lower() in ("bridge-tray", "tray"):
+        sys.argv.append("tray")
     main()

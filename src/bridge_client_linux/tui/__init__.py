@@ -1,69 +1,36 @@
 """
-bridge_client_linux.tui — Терминальный интерфейс (TUI) Bridge Local.
+bridge_client_linux.tui — Micro/Mini HUD Bridge Local v0.3.0.
 
-Экспортирует:
-  - OFFICIAL_THEME, PaletteTheme
-  - BRIDGES_MASTER, DRAWBRIDGE_INDUSTRIAL, DRAWBRIDGE_HEADER
-  - render_welcome_screen, render_operational_header, render_current_mode
-  - run_interactive_tui, handle_key_action
-  - demo_process_animations
+Единственный интерфейс: Micro/Mini HUD (4-5 строк).
 """
 
 from __future__ import annotations
 
-from bridge_client_linux.tui.animations import demo_process_animations
 from bridge_client_linux.tui.app import (
-    F_KEY_MAP,
-    MODES_ORDER,
-    PAGE_SIZES,
-    handle_key_action,
-    handle_scroll_action,
+    dispatch_omnibar_action,
+    dispatch_tui_action,
+    probe_target_socket,
     read_terminal_key,
     run_interactive_tui,
 )
-from bridge_client_linux.tui.logos import (
-    BRIDGES_MASTER,
-    DRAWBRIDGE_HEADER,
-    DRAWBRIDGE_INDUSTRIAL,
-)
 from bridge_client_linux.tui.screens import (
-    render_config_mode,
+    format_bytes,
+    get_live_context,
     render_current_mode,
-    render_dashboard_mode,
-    render_dev_mode,
-    render_exec_mode,
-    render_mode_tabs,
-    render_notes_mode,
-    render_operational_header,
-    render_pocket_mode,
-    render_theme_spec,
-    render_welcome_screen,
+    render_mini_hud,
 )
 from bridge_client_linux.tui.theme import OFFICIAL_THEME, PaletteTheme
 
 __all__ = [
-    "BRIDGES_MASTER",
-    "DRAWBRIDGE_HEADER",
-    "DRAWBRIDGE_INDUSTRIAL",
-    "F_KEY_MAP",
-    "MODES_ORDER",
     "OFFICIAL_THEME",
-    "PAGE_SIZES",
     "PaletteTheme",
-    "demo_process_animations",
-    "handle_key_action",
-    "handle_scroll_action",
+    "dispatch_omnibar_action",
+    "dispatch_tui_action",
+    "format_bytes",
+    "get_live_context",
+    "probe_target_socket",
     "read_terminal_key",
-    "render_config_mode",
     "render_current_mode",
-    "render_dashboard_mode",
-    "render_dev_mode",
-    "render_exec_mode",
-    "render_mode_tabs",
-    "render_notes_mode",
-    "render_operational_header",
-    "render_pocket_mode",
-    "render_theme_spec",
-    "render_welcome_screen",
+    "render_mini_hud",
     "run_interactive_tui",
 ]

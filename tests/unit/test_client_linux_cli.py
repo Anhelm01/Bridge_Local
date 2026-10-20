@@ -131,7 +131,7 @@ def test_cli_version():
     res_json = runner.invoke(app, ["--version", "--json"])
     assert res_json.exit_code == 0
     data = json.loads(res_json.stdout)
-    assert data["version"] == "0.1.0"
+    assert data["version"] == "0.3.0"
     assert data["core"] == "bridge_core"
 
 
@@ -382,15 +382,11 @@ def test_cli_auth_error_exit_code(cli_auth_server, tmp_path: Path):
     assert data["error_type"] == "BridgeAuthError"
 
 
-def test_cli_welcome_and_tui_single_pass():
-    """Проверяет отрисовку welcome и TUI без зависания."""
-    res_welcome = runner.invoke(app, ["welcome"])
-    assert res_welcome.exit_code == 0
-    assert "BRIDGES" in res_welcome.stdout
-
-    res_tui = runner.invoke(app, ["tui", "--single-pass", "--mode", "DASH"])
+def test_cli_tui_single_pass():
+    """Проверяет отрисовку Mini HUD TUI без зависания."""
+    res_tui = runner.invoke(app, ["tui", "--single-pass"])
     assert res_tui.exit_code == 0
-    assert "DRAWBRIDGE" in res_tui.stdout
+    assert "BRIDGE LOCAL" in res_tui.stdout
 
 
 def test_cli_send_success(cli_server, tmp_path: Path):

@@ -217,11 +217,56 @@ bridge-cli note list
 bridge-cli note read <ID_ЗАПИСКИ>
 ```
 
-### 5.5 Графический интерфейс терминала (`tui`)
+### 5.5 Удаленный просмотр и поиск файлов (`ls` / `find`)
+```bash
+# Просмотр файлов на удаленном узле:
+bridge-cli ls "C:\Projects" --json
+
+# Поиск файлов по маске:
+bridge-cli find "*.log" "C:\Projects" --json
+```
+
+### 5.6 Утилиты токенов (`token`)
+```bash
+# Генерация нового криптографически стойкого токена:
+bridge-cli token generate
+
+# Проверка токена:
+bridge-cli token verify <ТОКЕН>
+```
+
+### 5.7 Очистка кармана (`pocket clear`)
+```bash
+# Очистить временные файлы в кармане без интерактивного подтверждения:
+bridge-cli pocket clear --force --json
+```
+
+### 5.8 Управление сервером-демоном Linux (`service`)
+В версии **v0.3.0** Linux-бинарник может запускаться в режиме сервера:
+```bash
+# Запуск в текущей консоли:
+bridge-cli service run
+
+# Запуск в фоновом режиме (Detached):
+bridge-cli service start
+
+# Проверка статуса:
+bridge-cli service status --json
+
+# Остановка демона:
+bridge-cli service stop
+
+# Автоматическая установка в качестве службы systemd:
+bridge-cli service install-systemd
+```
+
+### 5.9 Терминальный микро-интерфейс (`tui` / Mini HUD)
 ```bash
 bridge-cli tui
+# или просто:
+bridge-cli
 ```
-Полноэкранный дашборд с мониторингом каналов связи, файлов Кармана и журнала заметок.
+Компактный интерактивный Mini HUD (4-5 строк) с единой командной строкой Omnibar (`e <cmd>`, `send <file>`, `drop -B`, `note <text>`, `token`, `connect`, `scan`, `q`). Не занимает экран целиком и сохраняет историю терминала.
 
 ---
 
@@ -237,8 +282,8 @@ bridge-cli tui
 | `0` | `SUCCESS` | Команда выполнена успешно |
 | `1` | `GENERAL_ERROR` | Неверные аргументы или внутренняя ошибка приложения |
 | `2` | `NETWORK_ERROR` | Целевой хост недоступен, сокет сброшен, отказ в соединении |
-| `3` | `AUTH_ERROR` | Несовпадение PSK-токена, ошибка HMAC, атака повторного воспроизведения |
-| `4` | `COMMAND_FAILED` | Процесс PowerShell на Windows завершился с ненулевым кодом |
+| `3` | `AUTH_ERROR` | Несовпадение PSK-токена, ошибка AEAD/HMAC, атака повторного воспроизведения |
+| `4` | `COMMAND_FAILED` | Процесс (PowerShell на Windows или Bash на Linux) завершился с ненулевым кодом |
 | `5` | `TIMEOUT` | Превышен лимит времени ожидания ответа узла |
 
 ---

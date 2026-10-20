@@ -340,13 +340,19 @@ class BridgeTrayIcon:
             logger.info("[TRAY] Автономный агент уже запущен (PID=%s)", self._agent_process.pid)
             return True
 
-        cmd = [sys.executable, "-m", "bridge_agent_win.cli", "run"]
-        creationflags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
+        if getattr(sys, "frozen", False):
+            cmd = [sys.executable, "run"]
+        else:
+            cmd = [sys.executable, "-m", "bridge_agent_win.cli", "run"]
+
+        # DETACHED_PROCESS (0x00000008) | CREATE_NO_WINDOW (0x08000000)
+        creationflags = (0x00000008 | 0x08000000) if sys.platform == "win32" else 0
         try:
             self._agent_process = subprocess.Popen(
                 cmd,
                 creationflags=creationflags,
                 cwd=str(self.pocket_dir.parent),
+                close_fds=True,
             )
             logger.info("[TRAY] Автономный агент запущен (PID=%s)", self._agent_process.pid)
             self.update_status()
@@ -606,6 +612,14 @@ class BridgeTrayIcon:
 
     def run(self) -> None:
         """Запускает оконный цикл трея (блокирующий вызов)."""
+        if sys.platform == "win32":
+            with contextlib.suppress(Exception):
+                import ctypes
+
+                hwnd_console = ctypes.windll.kernel32.GetConsoleWindow()
+                if hwnd_console:
+                    ctypes.windll.user32.ShowWindow(hwnd_console, 0)  # SW_HIDE
+
         if not HAS_WIN32GUI:
             print("[WARN] pywin32 GUI модули недоступны на этой платформе.")
             return

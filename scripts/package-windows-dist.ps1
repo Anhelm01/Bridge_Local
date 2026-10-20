@@ -30,9 +30,9 @@ New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
 # 1. Бинарный файл
 Copy-Item $exePath -Destination $targetDir
 
-# 2. Файлы управления (.bat)
+# 2. Файлы управления (.bat и .vbs)
 $winScriptsDir = Join-Path $repoRoot "scripts\windows"
-Get-ChildItem -Path $winScriptsDir -Filter "*.bat" | ForEach-Object {
+Get-ChildItem -Path $winScriptsDir -Include "*.bat","*.vbs" -Recurse:$false | ForEach-Object {
     Copy-Item $_.FullName -Destination $targetDir
 }
 

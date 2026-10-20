@@ -34,6 +34,7 @@ from bridge_core.protocol import (
     read_frame,
     write_frame,
 )
+from bridge_core.security import AeadFrameCipher, AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class TransportError(Exception):
 
 class AsyncTransportServer:
     """
-    Асинхронный TCP сервер с поддержкой TLS и диспетчеризацией JSON-RPC 2.0.
+    Асинхронный TCP сервер с поддержкой TLS, AEAD шифрования и диспетчеризацией JSON-RPC 2.0.
 
     Принимает соединения, читает фреймы, маршрутизирует вызовы по зарегистрированным
     методам и возвращает ответы.
@@ -73,11 +74,13 @@ class AsyncTransportServer:
         host: str = "0.0.0.0",
         port: int = 9732,
         ssl_context: ssl.SSLContext | None = None,
+        psk_token: str | None = None,
         dev_logging: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.ssl_context = ssl_context
+        self.psk_token = psk_token
         self.dev_logging = dev_logging
 
         self._handlers: dict[str, RpcHandler] = {}
@@ -99,12 +102,32 @@ class AsyncTransportServer:
         if self._is_running:
             return
 
-        self._server = await asyncio.start_server(
-            self._handle_client_connection,
-            host=self.host,
-            port=self.port,
-            ssl=self.ssl_context,
-        )
+        try:
+            self._server = await asyncio.start_server(
+                self._handle_client_connection,
+                host=self.host,
+                port=self.port,
+                ssl=self.ssl_context,
+            )
+        except OSError as exc:
+            # Если хост не 0.0.0.0 (например, внешний IP узла из конфига) и ОС не может к нему привязаться,
+            # пробуем резервную привязку ко всем интерфейсам (0.0.0.0)
+            if self.host not in ("0.0.0.0", "127.0.0.1", "localhost", ""):
+                logger.warning(
+                    "[SERVER] Сбой привязки к %s:%d (%s). Резервный запуск на 0.0.0.0...",
+                    self.host,
+                    self.port,
+                    exc,
+                )
+                self._server = await asyncio.start_server(
+                    self._handle_client_connection,
+                    host="0.0.0.0",
+                    port=self.port,
+                    ssl=self.ssl_context,
+                )
+            else:
+                raise
+
         self._is_running = True
 
         addrs = ", ".join(str(sock.getsockname()) for sock in self._server.sockets)
@@ -153,26 +176,47 @@ class AsyncTransportServer:
         session_id = f"sess-{uuid.uuid4().hex[:8]}"
         t_connect = time.perf_counter_ns()
 
+        cipher = AeadFrameCipher.for_server(self.psk_token) if self.psk_token else None
+
         logger.info(
-            "[DEV-SERVER-CONN] Новое подключение [%s] от %s",
+            "[DEV-SERVER-CONN] Новое подключение [%s] от %s (AEAD=%s)",
             session_id,
             peername,
+            bool(cipher),
         )
         session_info: dict[str, Any] = {
             "session_id": session_id,
             "peername": peername,
             "connected_at_ns": t_connect,
+            "cipher": cipher,
         }
 
         try:
             while self._is_running:
                 try:
-                    payload = await read_frame(reader, dev_logging=self.dev_logging)
+                    meta: dict[str, Any] = {}
+                    payload = await read_frame(
+                        reader, cipher=cipher, dev_logging=self.dev_logging, out_meta=meta
+                    )
+                    session_info["peer_encrypted"] = meta.get("is_encrypted", False)
                 except asyncio.IncompleteReadError:
                     logger.debug("[%s] Клиент закрыл соединение", session_id)
                     break
                 except InvalidMagicError as e:
                     logger.warning("[%s] Разрыв из-за неверного MAGIC: %s", session_id, e)
+                    break
+                except AuthenticationError as e:
+                    logger.warning("[%s] Ошибка AEAD аутентификации от клиента: %s", session_id, e)
+                    err_resp = JsonRpcErrorResponse(
+                        id="null",
+                        error=JsonRpcError(
+                            code=RpcErrorCode.AUTH_FAILED,
+                            message=f"AEAD authentication failed: {e}",
+                        ),
+                    )
+                    await write_frame(
+                        writer, encode_jsonrpc(err_resp), cipher=None, dev_logging=self.dev_logging
+                    )
                     break
                 except ProtocolError as e:
                     logger.error("[%s] Ошибка протокола: %s", session_id, e)
@@ -207,6 +251,8 @@ class AsyncTransportServer:
         start_ns: int,
     ) -> None:
         """Парсит JSON-RPC запрос, вызывает обработчик и отправляет ответ."""
+        # Шифруем ответ только если входящий запрос клиента был зашифрован
+        cipher = session_info.get("cipher") if session_info.get("peer_encrypted", False) else None
         try:
             msg = parse_jsonrpc(payload)
         except Exception as e:
@@ -217,7 +263,9 @@ class AsyncTransportServer:
                     message=f"Ошибка парсинга JSON-RPC: {e}",
                 ),
             )
-            await write_frame(writer, encode_jsonrpc(err_resp), dev_logging=self.dev_logging)
+            await write_frame(
+                writer, encode_jsonrpc(err_resp), cipher=cipher, dev_logging=self.dev_logging
+            )
             return
 
         if not isinstance(msg, JsonRpcRequest):
@@ -238,7 +286,9 @@ class AsyncTransportServer:
                     message=f"Метод '{msg.method}' не найден на узле",
                 ),
             )
-            await write_frame(writer, encode_jsonrpc(err_resp), dev_logging=self.dev_logging)
+            await write_frame(
+                writer, encode_jsonrpc(err_resp), cipher=cipher, dev_logging=self.dev_logging
+            )
             return
 
         try:
@@ -276,7 +326,7 @@ class AsyncTransportServer:
             duration_us,
             len(resp_bytes),
         )
-        await write_frame(writer, resp_bytes, dev_logging=self.dev_logging)
+        await write_frame(writer, resp_bytes, cipher=cipher, dev_logging=self.dev_logging)
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +336,7 @@ class AsyncTransportServer:
 
 class AsyncTransportClient:
     """
-    Асинхронный TCP клиент с поддержкой TLS для вызова JSON-RPC методов.
+    Асинхронный TCP клиент с поддержкой TLS и AEAD шифрования для вызова JSON-RPC методов.
 
     Обеспечивает установку соединения, отправку запросов и получение ответов.
     """
@@ -296,12 +346,14 @@ class AsyncTransportClient:
         host: str = "127.0.0.1",
         port: int = 9732,
         ssl_context: ssl.SSLContext | None = None,
+        psk_token: str | None = None,
         connect_timeout: float = 5.0,
         dev_logging: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.ssl_context = ssl_context
+        self.psk_token = psk_token
         self.connect_timeout = connect_timeout
         self.dev_logging = dev_logging
 
@@ -309,6 +361,8 @@ class AsyncTransportClient:
         self._writer: asyncio.StreamWriter | None = None
         self._is_connected = False
         self._lock = asyncio.Lock()
+        self._cipher: AeadFrameCipher | None = None
+        self._aead_disabled = False
 
     @property
     def is_connected(self) -> bool:
@@ -326,11 +380,12 @@ class AsyncTransportClient:
 
         t0 = time.perf_counter_ns()
         logger.debug(
-            "[DEV-CLIENT] Подключение к %s:%d (timeout=%.1fs, TLS=%s)...",
+            "[DEV-CLIENT] Подключение к %s:%d (timeout=%.1fs, TLS=%s, AEAD=%s)...",
             self.host,
             self.port,
             self.connect_timeout,
             bool(self.ssl_context),
+            bool(self.psk_token and not self._aead_disabled),
         )
 
         try:
@@ -343,12 +398,18 @@ class AsyncTransportClient:
                 timeout=self.connect_timeout,
             )
             self._is_connected = True
+            if self.psk_token and not self._aead_disabled:
+                self._cipher = AeadFrameCipher.for_client(self.psk_token)
+            else:
+                self._cipher = None
+
             elapsed_ms = (time.perf_counter_ns() - t0) / 1_000_000
             logger.info(
-                "[CLIENT] Успешно подключено к %s:%d за %.2f мс",
+                "[CLIENT] Успешно подключено к %s:%d за %.2f мс (AEAD=%s)",
                 self.host,
                 self.port,
                 elapsed_ms,
+                bool(self._cipher),
             )
         except TimeoutError as e:
             self._is_connected = False
@@ -362,6 +423,7 @@ class AsyncTransportClient:
     async def close(self) -> None:
         """Закрывает соединение с агентом."""
         self._is_connected = False
+        self._cipher = None
         if self._writer:
             self._writer.close()
             with contextlib.suppress(Exception):
@@ -390,43 +452,71 @@ class AsyncTransportClient:
             RpcCallError: Если сервер вернул JsonRpcErrorResponse.
             TimeoutError: Если сервер не ответил за timeout_sec.
         """
-        if not self.is_connected or not self._writer or not self._reader:
-            await self.connect()
+        for attempt in range(2):
+            if not self.is_connected or not self._writer or not self._reader:
+                await self.connect()
 
-        assert self._writer is not None
-        assert self._reader is not None
+            assert self._writer is not None
+            assert self._reader is not None
 
-        async with self._lock:
-            t0 = time.perf_counter_ns()
-            req_bytes = encode_jsonrpc(request)
+            fallback_to_br = False
+            async with self._lock:
+                t0 = time.perf_counter_ns()
+                req_bytes = encode_jsonrpc(request)
 
-            # Отправка фрейма
-            try:
-                await write_frame(self._writer, req_bytes, dev_logging=self.dev_logging)
-            except Exception as e:
-                await self.close()
-                raise TransportError(f"Ошибка отправки фрейма: {e}") from e
-
-            # Ожидание ответа
-            try:
-                if timeout_sec:
-                    resp_payload = await asyncio.wait_for(
-                        read_frame(self._reader, dev_logging=self.dev_logging),
-                        timeout=timeout_sec,
+                # Отправка фрейма
+                try:
+                    await write_frame(
+                        self._writer, req_bytes, cipher=self._cipher, dev_logging=self.dev_logging
                     )
-                else:
-                    resp_payload = await read_frame(self._reader, dev_logging=self.dev_logging)
-            except TimeoutError:
-                logger.warning(
-                    "[CLIENT] Таймаут ответа RPC (method=%s, id=%s, limit=%.1fs)",
-                    request.method,
-                    request.id,
-                    timeout_sec or 0,
-                )
-                raise
-            except Exception as e:
-                await self.close()
-                raise TransportError(f"Ошибка чтения ответа: {e}") from e
+                except Exception as e:
+                    await self.close()
+                    raise TransportError(f"Ошибка отправки фрейма: {e}") from e
+
+                # Ожидание ответа
+                try:
+                    if timeout_sec:
+                        resp_payload = await asyncio.wait_for(
+                            read_frame(
+                                self._reader, cipher=self._cipher, dev_logging=self.dev_logging
+                            ),
+                            timeout=timeout_sec,
+                        )
+                    else:
+                        resp_payload = await read_frame(
+                            self._reader, cipher=self._cipher, dev_logging=self.dev_logging
+                        )
+                except AuthenticationError as e:
+                    await self.close()
+                    raise RpcCallError(
+                        code=RpcErrorCode.AUTH_FAILED,
+                        message=f"AEAD authentication error: {e}",
+                    ) from e
+                except TimeoutError:
+                    logger.warning(
+                        "[CLIENT] Таймаут ответа RPC (method=%s, id=%s, limit=%.1fs)",
+                        request.method,
+                        request.id,
+                        timeout_sec or 0,
+                    )
+                    raise
+                except asyncio.IncompleteReadError as e:
+                    had_cipher = self._cipher is not None
+                    await self.close()
+                    if attempt == 0 and had_cipher and not e.partial:
+                        logger.info(
+                            "[CLIENT] Сервер закрыл соединение на фрейме BE (legacy peer v0.1.x). Пробуем fallback на фреймы BR..."
+                        )
+                        self._aead_disabled = True
+                        fallback_to_br = True
+                    else:
+                        raise TransportError(f"Ошибка чтения ответа: {e}") from e
+                except Exception as e:
+                    await self.close()
+                    raise TransportError(f"Ошибка чтения ответа: {e}") from e
+
+            if fallback_to_br:
+                continue
 
             # Разбор ответа
             msg = parse_jsonrpc(resp_payload)
@@ -454,6 +544,7 @@ class AsyncTransportClient:
                 return msg
 
             raise ProtocolError(f"Неожиданный тип сообщения в ответ на запрос: {type(msg)}")
+        raise TransportError("Не удалось выполнить RPC-вызов после попыток подключения")
 
     async def call(
         self,
@@ -494,3 +585,18 @@ class AsyncTransportClient:
     async def disconnect(self) -> None:
         """Алиас для close() для единообразия клиентского API."""
         await self.close()
+
+
+def check_port_listening(host: str, port: int, timeout_sec: float = 0.5) -> bool:
+    """
+    Проверяет доступность TCP-порта узла или сервиса.
+    """
+    import socket
+
+    target_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    try:
+        with socket.create_connection((target_host, port), timeout=timeout_sec):
+            return True
+    except OSError:
+        return False
+

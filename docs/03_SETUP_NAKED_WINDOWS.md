@@ -52,18 +52,21 @@ Set-Location D:\progs\Bridge_Local
 Структура каталога проекта:
 ```text
 Bridge_Local/
-├── bridge.toml             # Главный конфигурационный файл
-├── start.bat               # Консоль управления Windows (CMD / PowerShell)
-├── run_tray.bat            # Запуск значка в системном трее
+├── bridge.example.toml     # Эталонный шаблон конфигурации
+├── bridge.toml             # Главный конфигурационный файл (копируется автоматически)
+├── start.bat               # Консоль управления Windows (главный центр управления)
+├── start.sh                # Консоль управления Linux
 ├── bridge-agent.spec       # Спецификация PyInstaller для сборки .exe
 ├── pyproject.toml          # Манифест пакета и зависимостей
 ├── src/
 │   ├── bridge_core/        # Ядро сетевого протокола, криптография, хранилище
-│   └── bridge_agent_win/   # Исходный код демона Windows (служба, трей, меню)
+│   ├── bridge_agent_win/   # Исходный код демона Windows (служба, трей, меню, клиент)
+│   └── bridge_client_linux/# Код Linux-клиента
 ├── pocket/                 # Общий каталог Карман
 │   └── .notes/             # Локальная база заметок SQLite
 └── scripts/
-    └── build-windows-agent.ps1  # Скрипт сборки автономного бинарника
+    ├── build-windows-agent.ps1  # Скрипт сборки автономного бинарника
+    └── windows/                 # Вспомогательные скрипты (run_tray.bat, context_menu и др.)
 ```
 
 ---
@@ -164,22 +167,27 @@ New-Item -ItemType Directory -Path "pocket\.notes" -Force
 
 ## 5. Настройка Брандмауэра Windows (Firewall)
 
-Чтобы агент мог принимать сетевые пакеты от Linux-клиента на порт `9732`, откройте порт в Windows Defender Firewall.
+Чтобы агент мог принимать сетевые пакеты от Linux-клиента на порт `9732`, а также отвечать на запросы обнаружения узлов на порту `9735`, откройте порты в Windows Defender Firewall.
 
 Запустите PowerShell от имени **Администратора**:
 
 ```powershell
-# 1. Удаление старого правила (при наличии) и добавление разрешающего правила для порта 9732 TCP
-netsh advfirewall firewall delete rule name="Bridge Local Daemon (TCP-In)"
+# 1. Открытие порта 9732 TCP (Основной RPC канал и передача файлов)
+netsh advfirewall firewall delete rule name="Bridge Local Daemon (TCP-In)" >$null 2>&1
 netsh advfirewall firewall add rule name="Bridge Local Daemon (TCP-In)" dir=in action=allow protocol=TCP localport=9732 profile=any
 
-# 2. Установка сетевого профиля как "Частная сеть" (Private) для предотвращения блокировок
+# 2. Открытие порта 9735 UDP (LAN Discovery обнаружение узлов)
+netsh advfirewall firewall delete rule name="Bridge Local Discovery (UDP-In)" >$null 2>&1
+netsh advfirewall firewall add rule name="Bridge Local Discovery (UDP-In)" dir=in action=allow protocol=UDP localport=9735 profile=any
+
+# 3. Установка сетевого профиля как "Частная сеть" (Private) для предотвращения блокировок
 Set-NetConnectionProfile -InterfaceAlias 'Ethernet*','Wi-Fi*' -NetworkCategory Private -ErrorAction SilentlyContinue
 ```
 
-*Проверка созданного правила:*
+*Проверка созданных правил:*
 ```powershell
 netsh advfirewall firewall show rule name="Bridge Local Daemon (TCP-In)"
+netsh advfirewall firewall show rule name="Bridge Local Discovery (UDP-In)"
 ```
 
 ---
@@ -258,18 +266,52 @@ python -m bridge_agent_win tray
 - **Статус службы** — проверка состояния демона.
 - **Выход**.
 
+### 6.5 Клиентские команды Windows-узла (P2P управление Linux)
+В версии **v0.3.0** агент Windows может удаленно выполнять команды на Linux и запрашивать данные:
+
+```powershell
+# Проверка связи с Linux-узлом:
+python -m bridge_agent_win ping
+
+# Удаленное выполнение Bash-команд на Linux:
+python -m bridge_agent_win exec "uname -a; df -h" --json
+
+# Удаленный просмотр директории на Linux:
+python -m bridge_agent_win ls /home/user/Projects --json
+
+# Поиск файлов на Linux:
+python -m bridge_agent_win find "*.log" /var/log --json
+
+# Отправка файла в удаленный карман Linux:
+python -m bridge_agent_win send "C:\dist\app.zip" --json
+
+# Отправка текстовой заметки:
+python -m bridge_agent_win note send "Привет из Windows PowerShell!" --json
+```
+
 ---
 
 ## 7. Универсальная консоль `start.bat` в режиме исходного кода
 
-В корне репозитория расположен файл `start.bat`. При запуске из исходного кода он автоматически обнаруживает `.venv` и позволяет выполнять все операции в один клик:
+В корне репозитория расположен файл `start.bat`. При запуске из исходного кода он автоматически обнаруживает `.venv` и предоставляет полный центр управления (13 пунктов):
 
 ```cmd
 start.bat
 ```
 
-- Выберите **`[1] QUICK START`** — скрипт сам проверит брандмауэр, зарегистрирует контекстное меню и откроет Live Monitor.
-- Выберите **`[12] Drop Clipboard to Pocket`** — сохранит буфер обмена в Карман.
+- **`[1] QUICK START (Recommended)`** — Автоматическая комплексная настройка брандмауэра, контекстного меню, запуск отвязанного фонового демона и иконки трея.
+- **`[2] INSTALL AS BACKGROUND WINDOWS SERVICE`** — Установка и автозапуск службы SCM.
+- **`[3] Run Agent in Console`** — Запуск Live Monitor с интерактивом.
+- **`[4] Stop Background Agent Daemon`** — Остановка фонового процесса.
+- **`[5] Network & Pocket Configuration Wizard`** — Интерактивный мастер настроек.
+- **`[6] Global Windows System Setup`** — Развертывание в `C:\BridgeLocal` и добавление в `PATH`.
+- **`[7] Manage Windows Service (SCM)`** — Старт/стоп/рестарт службы.
+- **`[8] Configure Windows Firewall`** — Открытие портов 9732 TCP и 9735 UDP.
+- **`[9] Explorer Context Menu Integration`** — Установка пункта «Отправить в Карман».
+- **`[10] Windows System Tray & Autostart`** — Запуск трея и ярлык в `shell:startup`.
+- **`[11] Rebuild Standalone Executable`** — Пересборка `bridge-agent.exe` через PyInstaller.
+- **`[12] Uninstall & Clean Up`** — Полное удаление службы, меню, правил и ярлыков.
+- **`[13] Drop Clipboard to Pocket`** — Мгновенный сброс буфера в карман (`start.bat clip`).
 
 ---
 

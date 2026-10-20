@@ -11,6 +11,7 @@ Bridge Core — общее ядро системы Bridge Local.
   - Конфигурацию TOML (BridgeConfig).
 """
 
+from bridge_core.client import BridgeClient
 from bridge_core.codec import DecodedOutput, WindowsOutputDecoder
 from bridge_core.config import (
     BridgeConfig,
@@ -21,11 +22,19 @@ from bridge_core.config import (
     NodeConfig,
     PocketConfig,
 )
+from bridge_core.executor import (
+    BaseExecutor,
+    BashExecutor,
+    PowerShellExecutor,
+    create_platform_executor,
+)
 from bridge_core.heartbeat import HeartbeatManager, HeartbeatTimeoutError
 from bridge_core.logger import AtomicJsonlLogger, setup_logging
 from bridge_core.models import (
     FRAME_HEADER_SIZE,
     FRAME_MAGIC,
+    FRAME_MAGIC_ENCRYPTED,
+    FRAME_MAGIC_PLAIN,
     MAX_PAYLOAD_SIZE,
     AuditLogEntry,
     AuditStatus,
@@ -46,6 +55,9 @@ from bridge_core.models import (
     NoteSendParams,
     NoteStatus,
     PingParams,
+    PocketClearResult,
+    PocketEventsParams,
+    PocketEventsResult,
     PocketFileInfo,
     PocketManifestResult,
     PocketOffsetParams,
@@ -56,6 +68,7 @@ from bridge_core.models import (
     RpcErrorCode,
     RpcMethod,
 )
+from bridge_core.process_killer import kill_process_tree
 from bridge_core.protocol import (
     FrameTooLargeError,
     InvalidMagicError,
@@ -73,6 +86,7 @@ from bridge_core.retry import (
     retry_with_backoff,
 )
 from bridge_core.security import (
+    AeadFrameCipher,
     AuthenticationError,
     PathTraversalError,
     PSKAuthenticator,
@@ -80,8 +94,10 @@ from bridge_core.security import (
     TokenReplayError,
     create_client_ssl_context,
     create_server_ssl_context,
+    derive_hkdf_keys,
     validate_safe_path,
 )
+from bridge_core.service import BridgeService, get_system_metrics
 from bridge_core.transport import (
     AsyncTransportClient,
     AsyncTransportServer,
@@ -89,19 +105,27 @@ from bridge_core.transport import (
     TransportError,
 )
 
-__version__ = "0.1.0-dev"
+__version__ = "0.3.0"
 
 __all__ = [
+    "AEAD_NONCE_SIZE",
     "FRAME_HEADER_SIZE",
     "FRAME_MAGIC",
+    "FRAME_MAGIC_ENCRYPTED",
+    "FRAME_MAGIC_PLAIN",
     "MAX_PAYLOAD_SIZE",
+    "AeadFrameCipher",
     "AsyncTransportClient",
     "AsyncTransportServer",
     "AtomicJsonlLogger",
     "AuditLogEntry",
     "AuditStatus",
     "AuthenticationError",
+    "BaseExecutor",
+    "BashExecutor",
+    "BridgeClient",
     "BridgeConfig",
+    "BridgeService",
     "ConnectionConfig",
     "ConnectionState",
     "DecodedOutput",
@@ -132,7 +156,10 @@ __all__ = [
     "PSKAuthenticator",
     "PathTraversalError",
     "PingParams",
+    "PocketClearResult",
     "PocketConfig",
+    "PocketEventsParams",
+    "PocketEventsResult",
     "PocketFileInfo",
     "PocketManifestResult",
     "PocketOffsetParams",
@@ -140,6 +167,7 @@ __all__ = [
     "PocketPullParams",
     "PocketPushParams",
     "PongResult",
+    "PowerShellExecutor",
     "ProtocolError",
     "RpcCallError",
     "RpcErrorCode",
@@ -151,10 +179,14 @@ __all__ = [
     "__version__",
     "async_retry_with_backoff",
     "create_client_ssl_context",
+    "create_platform_executor",
     "create_server_ssl_context",
+    "derive_hkdf_keys",
     "encode_frame",
     "encode_jsonrpc",
+    "get_system_metrics",
     "is_sharing_violation",
+    "kill_process_tree",
     "parse_jsonrpc",
     "read_frame",
     "retry_with_backoff",

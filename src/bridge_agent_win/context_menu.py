@@ -60,9 +60,10 @@ def find_bridge_config(explicit_path: Path | str | None = None) -> Path | None:
 
     # 2. Рядом с исполняемым файлом или на уровень выше (если exe в dist/ или build/)
     exe_p = Path(sys.executable).resolve()
-    if exe_p.parent.name.lower() in ("dist", "build") and (
-        exe_p.parent.parent / "bridge.toml"
-    ).exists():
+    if (
+        exe_p.parent.name.lower() in ("dist", "build")
+        and (exe_p.parent.parent / "bridge.toml").exists()
+    ):
         return exe_p.parent.parent / "bridge.toml"
     if (exe_p.parent / "bridge.toml").exists():
         return exe_p.parent / "bridge.toml"
@@ -72,9 +73,10 @@ def find_bridge_config(explicit_path: Path | str | None = None) -> Path | None:
     # 2c. По пути запуска процесса argv[0]
     if sys.argv and sys.argv[0]:
         argv_p = Path(sys.argv[0]).resolve()
-        if argv_p.parent.name.lower() in ("dist", "build") and (
-            argv_p.parent.parent / "bridge.toml"
-        ).exists():
+        if (
+            argv_p.parent.name.lower() in ("dist", "build")
+            and (argv_p.parent.parent / "bridge.toml").exists()
+        ):
             return argv_p.parent.parent / "bridge.toml"
         if (argv_p.parent / "bridge.toml").exists():
             return argv_p.parent / "bridge.toml"
@@ -387,9 +389,7 @@ def drop_clipboard_to_pocket(
                     if Path(line).exists():
                         with contextlib.suppress(Exception):
                             results.append(
-                                drop_file_to_pocket(
-                                    line, config_path=config_path, show_alert=False
-                                )
+                                drop_file_to_pocket(line, config_path=config_path, show_alert=False)
                             )
                 if not results and out:
                     cfg_file = find_bridge_config(config_path)

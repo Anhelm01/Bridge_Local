@@ -40,7 +40,9 @@ from bridge_core.security import validate_safe_path
 logger = logging.getLogger(__name__)
 
 # Игнорируемые служебные папки и файлы при сканировании кармана
-DEFAULT_IGNORED_NAMES: frozenset[str] = frozenset({"logs", ".git", ".tmp", ".cache", "__pycache__"})
+DEFAULT_IGNORED_NAMES: frozenset[str] = frozenset(
+    {"logs", ".notes", ".git", ".tmp", ".cache", "__pycache__"}
+)
 
 
 def compute_file_sha256(path: Path | str, chunk_size: int = 65536) -> str:
@@ -330,6 +332,52 @@ class PocketManager:
 
         return PocketDiffResult(to_pull=to_pull, to_push=to_push, synced=synced)
 
+    def clear_pocket(self) -> tuple[int, int]:
+        """
+        Безопасно очищает карман от пользовательских файлов и подкаталогов.
+
+        Никогда не удаляет системные директории и файлы из ignored_names (logs, .notes, .git и т.д.)
+        и служебные файлы (.gitkeep).
+
+        Returns:
+            tuple (deleted_count, freed_bytes): Количество удалённых файлов и суммарный освобождённый объём.
+        """
+        deleted_count = 0
+        freed_bytes = 0
+
+        for root, _dirs, files in os.walk(self.pocket_dir, topdown=False):
+            rel_root = Path(root).relative_to(self.pocket_dir)
+            top_part = rel_root.parts[0] if rel_root.parts else ""
+            if top_part in self.ignored_names:
+                continue
+
+            for fname in files:
+                if fname in (".gitkeep",) or fname in self.ignored_names:
+                    continue
+                file_path = Path(root) / fname
+                try:
+                    size = file_path.stat().st_size
+                    file_path.unlink()
+                    deleted_count += 1
+                    freed_bytes += size
+                except OSError as e:
+                    logger.warning("[POCKET-CLEAR] Ошибка удаления файла %s: %s", file_path, e)
+
+            if root != str(self.pocket_dir):
+                dir_path = Path(root)
+                try:
+                    if not any(dir_path.iterdir()):
+                        dir_path.rmdir()
+                except OSError:
+                    pass
+
+        logger.info(
+            "[POCKET-CLEAR] Карман очищен: удалено %d файлов, освобождено %d байт",
+            deleted_count,
+            freed_bytes,
+        )
+        return deleted_count, freed_bytes
+
 
 # ---------------------------------------------------------------------------
 # Отслеживание изменений кармана (Watchdog с дебаунсом)
@@ -372,8 +420,12 @@ class PocketWatcher:
                     self.watcher = watcher
 
                 def on_any_event(self, event: Any) -> None:
-                    # Игнорируем директории и служебные файлы
-                    if event.is_directory:
+                    # Реагируем только на фактические изменения файлов (создание, изменение, перемещение)
+                    if event.is_directory or getattr(event, "event_type", "") not in (
+                        "created",
+                        "modified",
+                        "moved",
+                    ):
                         return
                     src = getattr(event, "src_path", "")
                     fname = os.path.basename(src)
@@ -405,21 +457,60 @@ class PocketWatcher:
 
         self._loop.call_soon_threadsafe(_sync_schedule)
 
+    async def _wait_for_stabilization(
+        self,
+        paths: list[str],
+        check_interval: float | None = None,
+        max_wait_sec: float = 30.0,
+    ) -> list[str]:
+        """
+        Ожидает стабилизации размера файлов (защита при копировании больших файлов:
+        фильмы, архивы, билды). Проверяет, что размер файла не меняется и файл доступен
+        для чтения без блокировок. Проверка выполняется параллельно для всех файлов пачки.
+        """
+        interval = check_interval or min(0.05, max(0.01, self.debounce_sec / 4))
+
+        async def _check_file(p: str) -> str | None:
+            path_obj = Path(p)
+            if not path_obj.exists() or not path_obj.is_file():
+                return None
+
+            t_start = time.monotonic()
+            prev_size = -1
+            while (time.monotonic() - t_start) < max_wait_sec:
+                try:
+                    curr_size = path_obj.stat().st_size
+                    with open(path_obj, "rb") as f:
+                        f.read(1)
+                    if prev_size >= 0 and curr_size == prev_size:
+                        return p
+                    prev_size = curr_size
+                except (OSError, PermissionError):
+                    pass
+                await asyncio.sleep(interval)
+
+            return p if path_obj.is_file() else None
+
+        results = await asyncio.gather(*[_check_file(p) for p in paths])
+        return [r for r in results if r is not None]
+
     async def _debounce_timer(self) -> None:
-        """Ожидает затишья файловых операций и вызывает коллбэк."""
+        """Ожидает затишья файловых операций, стабилизирует размер и вызывает коллбэк."""
         try:
             await asyncio.sleep(self.debounce_sec)
             paths = list(self._changed_paths)
             self._changed_paths.clear()
 
             if paths:
-                logger.info(
-                    "[WATCHDOG] Обнаружено изменение %d файлов в кармане (после дебаунса)",
-                    len(paths),
-                )
-                res = self.on_change_callback(paths)
-                if asyncio.iscoroutine(res):
-                    await res
+                stable_paths = await self._wait_for_stabilization(paths)
+                if stable_paths:
+                    logger.info(
+                        "[WATCHDOG] Обнаружено изменение %d файлов в кармане (после дебаунса и стабилизации)",
+                        len(stable_paths),
+                    )
+                    res = self.on_change_callback(stable_paths)
+                    if asyncio.iscoroutine(res):
+                        await res
         except asyncio.CancelledError:
             pass
 

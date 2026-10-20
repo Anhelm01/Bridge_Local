@@ -35,8 +35,8 @@ bridge-cli exec "Get-Date" --json
 | **`1`** | `GENERAL_ERROR` | Ошибка параметров, пути к файлу или конфигурации. Проверьте аргументы команды. |
 | **`2`** | `NETWORK_ERROR` | Удаленный хост недоступен или агент выключен. Не зацикливайте запросы. Проверьте сетевой адрес через `bridge-cli config show --json`. |
 | **`3`** | `AUTH_ERROR` | Не совпадает PSK-токен. Проверьте параметр `psk_token` в файле `bridge.toml`. |
-| **`4`** | `COMMAND_FAILED` | Скрипт PowerShell завершился с ошибкой (exit code != 0). Изучите поля `"stderr"` и `"cmd_exit_code"` в JSON-ответе. |
-| **`5`** | `TIMEOUT` | Превышен лимит времени выполнения (`--timeout`). Для тяжелых фоновых задач используйте `Start-Process`. |
+| **`4`** | `COMMAND_FAILED` | Удаленный процесс (PowerShell на Windows или Bash на Linux) завершился с ошибкой (exit code != 0). Изучите поля `"stderr"` и `"cmd_exit_code"` в JSON-ответе. |
+| **`5`** | `TIMEOUT` | Превышен лимит времени выполнения (`--timeout`). Для тяжелых фоновых задач используйте `Start-Process` (Windows) или `nohup` (Linux). |
 
 ### Правило 3: Никаких интерактивных блокировок на `stdin`
 Никогда не запускайте диалоговые мастера (`bridge-cli setup` или `bridge-cli tui`) в неинтерактивном окружении. Для смены настроек используйте команду `bridge-cli config set` или `bridge-cli connect` с явными аргументами.
@@ -113,6 +113,21 @@ bridge-cli pocket pull "build_log.txt" --dest "./logs/win_build_log.txt" --json
 ### 4.3 Просмотр файлов в удаленном кармане
 ```bash
 bridge-cli pocket status --json
+```
+
+### 4.4 Удаленный просмотр и поиск файлов (`ls` / `find`)
+```bash
+# Просмотр файлов в любой удаленной директории:
+bridge-cli ls "C:\Projects" --json
+
+# Поиск файлов по glob-шаблону:
+bridge-cli find "*.json" "C:\Projects" --json
+```
+
+### 4.5 Очистка временных файлов в кармане (`pocket clear`)
+```bash
+# Принудительная очистка кармана без диалоговых подтверждений:
+bridge-cli pocket clear --force --json
 ```
 
 ---

@@ -1,60 +1,70 @@
-# 01_DEV: Полное руководство разработчика и архитектурный справочник
+# 01_DEV: Полное руководство разработчика и архитектурный справочник (v0.3.0)
 
 ## 1. Базовая архитектура и философия дизайна
 
-**Bridge Local** спроектирован как высокопроизводительный, модульный и расширяемый межплатформенный мост взаимодействия между рабочими станциями Linux и Windows по защищенной локальной сети (LAN).
+**Bridge Local** спроектирован как высокопроизводительный, модульный и расширяемый симметричный межплатформенный P2P мост между рабочими станциями Linux и Windows по защищенной локальной сети (LAN).
+
+В версии **v0.3.0** архитектура стала полностью двунаправленной (**Universal P2P Node / Dual-Role Peer**): любой узел (как Linux, так и Windows) одновременно реализует функции демона-сервера (`BridgeService`) и клиента (`BridgeClient`).
 
 ```mermaid
 flowchart TB
-    subgraph Linux ["Узел Linux (Клиент / Оператор)"]
-        CLI["bridge-cli (Typer / Click)"]
-        TUI["TUI Dashboard (Rich / Textual)"]
-        L_DISP["RPC Диспетчер"]
-        L_TRANS["Асинхронный TCP Транспорт"]
+    subgraph Linux ["Узел Linux (Dual-Role Peer)"]
+        L_CLI["bridge-cli (Typer / Click)"]
+        L_TUI["Mini HUD (Micro-TUI & Omnibar)"]
+        L_CLIENT["BridgeClient (RPC Клиент)"]
+        L_SERV["BridgeService (Asyncio Демон :9732)"]
+        L_EXEC["BashExecutor (POSIX Subprocess, CWD)"]
         L_POCK["Движок Кармана (Pocket & Watcher)"]
         L_NOTE["Движок Заметок (SQLite)"]
     end
 
     subgraph Wire ["Защищенный TCP канал с префиксом длины (Порт 9732)"]
-        FRAME["Бинарный фрейм: 'BR' + uint32 len + JSON Payload"]
-        AUTH["HMAC-SHA256 криптоконверт + Nonce + Защита от replay"]
+        FRAME["Бинарный фрейм: 'BR' + uint32 len + Payload"]
+        AUTH["AEAD ChaCha20-Poly1305 / HMAC-SHA256 + Nonce + Replay Cache"]
     end
 
-    subgraph Windows ["Узел Windows (Агент / Демон)"]
-        W_SERV["Asyncio TCP Сервер (Защита от WinError 10048)"]
-        W_DISP["JSON-RPC 2.0 Диспетчер"]
-        W_EXEC["PowerShell Исполнитель (UTF-8, сохранение CWD)"]
-        W_MON["AgentConsoleMonitor (Живой дашборд)"]
+    subgraph Windows ["Узел Windows (Dual-Role Peer)"]
+        W_CLI["bridge-agent.exe CLI & Context Menu"]
         W_TRAY["Системный трей (Shell_NotifyIconW)"]
-        W_CTX["Контекстное меню Проводника & Буфер обмена"]
-        W_SCM["Служба Windows SCM (BridgeLocalAgent)"]
+        W_CLIENT["BridgeClient (Symmetric Client)"]
+        W_SERV["BridgeService / SCM (Asyncio Демон :9732)"]
+        W_EXEC["PowerShellExecutor (UTF-8, chcp 65001, CWD)"]
         W_POCK["Движок Кармана (Атомарные блокировки & Манифест)"]
         W_NOTE["Движок Заметок (SQLite Журнал)"]
     end
 
-    CLI --> L_DISP
-    TUI --> L_DISP
-    L_POCK --> L_DISP
-    L_NOTE --> L_DISP
-    L_DISP --> L_TRANS
-    L_TRANS <-->|Length-Prefixed TCP| FRAME
+    L_CLI --> L_CLIENT
+    L_TUI --> L_CLIENT
+    L_CLIENT <-->|TCP Stream| FRAME
     FRAME <--> AUTH
-    AUTH <-->|Порт 9732| W_SERV
-    W_SERV --> W_DISP
-    W_DISP --> W_EXEC
-    W_DISP --> W_POCK
-    W_DISP --> W_NOTE
-    W_MON <--> W_SERV
-    W_TRAY <--> W_SERV
-    W_CTX --> W_POCK
-    W_SCM --> W_SERV
+    AUTH <-->|TCP Stream| W_SERV
+
+    W_CLI --> W_CLIENT
+    W_TRAY --> W_SERV
+    W_CLIENT <-->|TCP Stream| FRAME
+    AUTH <-->|TCP Stream| L_SERV
+
+    L_SERV --> L_EXEC
+    L_SERV --> L_POCK
+    L_SERV --> L_NOTE
+
+    W_SERV --> W_EXEC
+    W_SERV --> W_POCK
+    W_SERV --> W_NOTE
 ```
 
 ### 1.1 Строгая развязка слоев и заменяемость
 Каждый архитектурный слой в репозитории строго изолирован через явные контракты DTO:
-- **`bridge_core`**: Полностью независимая общая библиотека, включающая кодек фреймирования, криптографический конверт, контракты JSON-RPC 2.0 (Pydantic V2), загрузчик конфигурации и подсистемы хранилища (Pocket и Notes). Не зависит от библиотек, специфичных только для Linux или Windows.
-- **`bridge_client_linux`**: Реализация клиента под Linux, содержащая асинхронный транспорт, интерфейс Typer CLI, интерактивный TUI на Rich и сервисные файлы systemd.
-- **`bridge_agent_win`**: Реализация агента под Windows, содержащая асинхронный сервер asyncio, исполнитель команд PowerShell, интеграцию со службой Windows SCM, контекстное меню Проводника, иконку в системном трее и консольный монитор.
+- **`bridge_core`**: Полностью независимая общая библиотека, включающая:
+  - `bridge_core.codec`: Кодек бинарного фреймирования (`'BR'` + 4-байтный uint32 заголовок).
+  - `bridge_core.security`: Криптографическая аутентификация AEAD ChaCha20-Poly1305 и HMAC-SHA256 с контролем дрейфа часов (Clock Skew) и защитой от повторов (Replay Cache).
+  - `bridge_core.executor`: Платформо-независимая абстракция удаленного выполнения процессов (`BaseExecutor`, `BashExecutor` для Linux/macOS, `PowerShellExecutor` для Windows и фабрика `create_platform_executor()`).
+  - `bridge_core.service`: Универсальный сетевой asyncio-сервер демона (`BridgeService`), диспетчеризирующий JSON-RPC 2.0 вызовы (`ping`, `exec`, `pocket_*`, `notes_*`, `fs_*`).
+  - `bridge_core.client`: Универсальный асинхронный клиент (`BridgeClient`) для отправки RPC-запросов и файлов на любой удаленный узел.
+  - `bridge_core.pocket`: Движок файлового Кармана с атомарной записью, блокировками и синхронизацией.
+  - `bridge_core.notes`: Журнал заметок на базе SQLite.
+- **`bridge_client_linux`**: Обертка клиента под Linux: интерфейс Typer CLI, компактный интерактивный Mini HUD с Omnibar, служба `bridge-cli service` и автогенерация unit-файлов systemd.
+- **`bridge_agent_win`**: Обертка узла под Windows: служба Windows SCM, консольный интерактивный монитор, иконка системного трея, интеграция с Проводником (Explorer Shell) и клиентские команды `bridge-agent exec/ping/ls/find/send/note`.
 
 ### 1.2 Совместимость с многоузловой топологией (Multi-Node Mesh)
 Ни один слой не опирается на жесткое предположение, что сеть состоит строго из двух машин 1:1. В каждом протокольном пакете и контракте RPC предусмотрены опциональные поля `source_node` и `target_node`. Все команды CLI поддерживают флаги переопределения `--node` / `--target`, позволяя прозрачно перейти к полносвязной сети 3+ узлов и координации агентов без изменения формата пакетов.
@@ -84,9 +94,21 @@ HEADER_FORMAT = ">2sI"  # 2 байта magic ('BR'), 4 байта unsigned int
 MAGIC_BYTES = b"BR"
 ```
 
-### 2.2 Криптографический конверт и аутентификация HMAC-SHA256 (`bridge_core.security`)
-Сырые данные никогда не передаются в открытом виде без криптографической аутентификации. Каждый фрейм оборачивает запрос/ответ JSON-RPC в конверт безопасности:
+### 2.2 Криптографический уровень: AEAD-шифрование и HMAC-конверт (`bridge_core.security`)
 
+Bridge Local реализует многоуровневую модель защиты сетевого канала без необходимости внешних PKI-сертификатов:
+
+#### 1. Сквозное AEAD шифрование (AES-256-GCM / HKDF RFC 5869)
+В актуальном протоколе полезная нагрузка защищается симметричным шифрованием с аутентифицированными данными (AEAD):
+- **Деривация суб-ключей (HKDF)**: Из общего секрета `psk_token` через `derive_hkdf_keys()` генерируются два независимых 256-битных суб-ключа:
+  - `client_to_server_key` (32 байта)
+  - `server_to_client_key` (32 байта)
+  Это предотвращает атаки отражения (Reflection Attacks).
+- **AAD (Authenticated Associated Data)**: Бинарный заголовок фрейма (`MAGIC` + `LEN` + `SEQ_NUM`) включается в AAD, гарантируя невозможность подмены длины или порядкового номера пакета.
+- **Монотонные счетчики Sequence Number (64-bit)**: Каждое сообщение инкрементирует счетчик пакетов, предотвращая Replay-атаки и перестановку сообщений на уровне TCP.
+
+#### 2. Защитный конверт HMAC-SHA256 (Envelope Protocol)
+В режиме совместимости запросы и ответы оборачиваются в JSON-конверт безопасности:
 ```json
 {
   "version": 1,
@@ -99,10 +121,10 @@ MAGIC_BYTES = b"BR"
 }
 ```
 
-#### Правила верификации:
-1. **Допуск рассинхронизации времени**: Проверяется по локальным часам узла в строгом окне $\pm 60$ секунд. Пакеты вне этого окна отклоняются с кодом `AUTH_ERROR`.
-2. **Защита от Replay-атак**: Одноразовые значения Nonce (`UUIDv4`) проверяются по LRU-кэшу недавних запросов в оперативной памяти. Повторные nonce в пределах допустимого окна отбрасываются.
-3. **Подпись HMAC**: Рассчитывается от строки `f"{version}:{timestamp}:{source_node}:{target_node}:{nonce}:{payload}"` по алгоритму `HMAC-SHA256` с использованием общего секретного ключа (PSK). Сверка выполняется через постоянное время (`hmac.compare_digest`) для защиты от атак по времени (timing attacks).
+##### Правила верификации:
+1. **Допуск рассинхронизации времени**: Проверяется по локальным часам узла в окне $\pm 30$..$\pm 60$ секунд. Пакеты вне этого окна отклоняются с кодом `AUTH_ERROR`.
+2. **Защита от Replay-атак**: Одноразовые значения Nonce (`UUIDv4`) проверяются по LRU-кэшу недавних запросов в оперативной памяти.
+3. **Подпись HMAC**: Рассчитывается от строки `f"{version}:{timestamp}:{source_node}:{target_node}:{nonce}:{payload}"` по алгоритму `HMAC-SHA256`. Сверка выполняется через постоянное время (`hmac.compare_digest`) для защиты от timing attacks.
 
 ### 2.3 Спецификация контрактов JSON-RPC 2.0
 Внутреннее поле `payload` строго соответствует спецификации JSON-RPC 2.0, типизированной через Pydantic V2:
@@ -199,9 +221,37 @@ MAGIC_BYTES = b"BR"
   - Вычисление очереди `to_push` (локальные новые или измененные файлы).
   - Определение статуса `is_in_sync` при полном совпадении хэшей.
 
+### 3.4 `bridge_core.executor` (Абстракция удаленного исполнения)
+- `BaseExecutor`: Базовый абстрактный класс для выполнения команд на локальной ОС.
+- `BashExecutor`: Реализация для POSIX-систем (Linux / macOS):
+  - Асинхронный запуск через `asyncio.create_subprocess_shell`.
+  - Отслеживание и сохранение рабочего каталога (`pwd -P`).
+  - Лимиты таймаутов с каскадным завершением процессов через `os.killpg(SIGTERM / SIGKILL)`.
+- `PowerShellExecutor`: Реализация для Windows:
+  - Принудительная UTF-8 кодировка (`chcp 65001`, `$OutputEncoding = UTF8`).
+  - Сохранение `$PWD` между вызовами.
+  - Каскадное уничтожение дерева процессов через `taskkill /F /T`.
+- `create_platform_executor()`: Автоматическая фабрика, возвращающая нативный исполнитель текущей платформы.
+
+### 3.5 `bridge_core.service` (Универсальный сетевой демон `BridgeService`)
+- Полнофункциональный асинхронный демон для любой операционной системы (Linux, Windows, macOS).
+- Запускает TCP-сервер `asyncio.start_server` с кодеком `StreamCodec`.
+- Встроенный JSON-RPC 2.0 диспетчер, обрабатывающий методы:
+  - `ping`: Healthcheck, замер RTT, опрос загрузки CPU/RAM узла.
+  - `exec`: Удаленное выполнение команд через платформенный исполнитель.
+  - `pocket_manifest`, `pocket_push_chunk`, `pocket_pull_chunk`: Потоковая синхронизация файлов блоками по 64 КБ с валидацией SHA-256.
+  - `notes_add`, `notes_history`, `notes_read`: ACID-хранилище заметок.
+  - `fs_list`, `fs_find`: Удаленная навигация и поиск по файловой системе.
+- Автоматическая очистка сокетов и поддержка graceful shutdown.
+
+### 3.6 `bridge_core.client` (Универсальный RPC-клиент `BridgeClient`)
+- Асинхронный клиент для взаимодействия с любым удаленным узлом Bridge Local.
+- Поддержка контекстного менеджера `async with BridgeClient(...) as client:`.
+- Полный набор клиентских методов: `ping()`, `exec()`, `fs_list()`, `fs_find()`, `pocket_status()`, `pocket_push_file()`, `pocket_pull_file()`, `send_note()`, `get_note_history()`, `mark_notes_as_read()`.
+
 ---
 
-## 4. Архитектура агента Windows (`bridge_agent_win`)
+## 4. Архитектура узла Windows (`bridge_agent_win`)
 
 ### 4.1 Демон Asyncio и устойчивость к занятости порта (`service.py`)
 - Запуск `asyncio.start_server`, привязанного к адресу `0.0.0.0:9732`.
@@ -280,7 +330,15 @@ MAGIC_BYTES = b"BR"
   - Упаковывает запросы в криптографические конверты безопасности через `StreamCodec` и выполняет разбор ответов.
   - Предоставляет методы высокого уровня: `ping()`, `exec()`, `pocket_status()`, `pocket_sync()`, `pocket_push_file()`, `pocket_pull_file()`, `note_send()`, `note_history()`.
 
-### 5.3 Фоновый наблюдатель кармана
+### 5.3 Фоновый демон службы на Linux (`bridge-cli service`)
+- Linux-узел может работать в роли сервера-демона через `BridgeService`:
+  - `bridge-cli service run`: Запуск демона в текущем терминале.
+  - `bridge-cli service start`: Запуск отвязанного фонового процесса с сохранением PID.
+  - `bridge-cli service stop`: Корректный graceful shutdown через PID-файл.
+  - `bridge-cli service status`: Проверка активности процесса, порта и кармана (поддерживает `--json`).
+  - `bridge-cli service install-systemd`: Автоматическая генерация и регистрация службы пользователя `systemd --user` (`bridge-service.service`) с `Restart=always`.
+
+### 5.4 Фоновый наблюдатель кармана (Pocket Watcher)
 - Команда `bridge-cli pocket sync --watch --interval 2.5`:
   - Циклически опрашивает удаленный агент и сверяет манифесты файлов.
   - Автоматически загружает новые локальные файлы и скачивает удаленные.
@@ -305,3 +363,17 @@ MAGIC_BYTES = b"BR"
 ### 6.4 Стандарт терминальных анимаций без мерцания (Zero-Flicker)
 - Терминальные анимации ожидания и синхронизации используют точечные глифы шрифта Брайля (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) без полной перерисовки терминала, что предотвращает мерцание и дергание курсора.
 - При передаче флага `--json` или выводе в неинтерактивный пайп любые анимационные escape-последовательности полностью отключаются.
+
+---
+
+## 7. Тестирование и верификация качества (369 тестов)
+
+Репозиторий покрыт комплексным набором модульных и интеграционных тестов:
+- **369/369 тестов проходят успешно (100% pass rate)**.
+- **Модули покрытия**:
+  - `tests/unit/`: Кодек фреймирования (`'BR'`), HKDF-деривация ключей, AEAD-шифрование, HMAC-подпись, анти-replay кэш, DTO-модели Pydantic V2, платформенные исполнители `BashExecutor` и `PowerShellExecutor`, `BridgeService`, `BridgeClient`, движок заметок SQLite, блокировки кармана, CLI-команды Linux и Windows.
+  - `tests/integration/`: Стресс-симуляция сетевых сбоев, задержек сети (jitter), разрывов TCP-соединений, симуляция падения процессов и восстановление состояния.
+- **Статический анализ**:
+  - `ruff check`: 100% соответствие стилю PEP 8 / Astral Ruff во всех 43 исходных файлах.
+  - `mypy`: 100% строгая статическая типизация без ошибок.
+- **Правило запуска тестов**: В соответствии с правилами безопасности проекта (Rule 10), запуск тестового набора (`pytest`) производится только по прямой явной команде оператора.

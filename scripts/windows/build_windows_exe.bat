@@ -4,9 +4,18 @@ title Bridge Local - Build Standalone bridge-agent.exe
 echo ========================================================
 echo   Bridge Local - Build Standalone Windows Agent (.exe)
 echo ========================================================
-cd /d "%~dp0"
+set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%..\..\scripts\build-windows-agent.ps1" (
+    set "PS_SCRIPT=%SCRIPT_DIR%..\..\scripts\build-windows-agent.ps1"
+) else if exist "%SCRIPT_DIR%..\build-windows-agent.ps1" (
+    set "PS_SCRIPT=%SCRIPT_DIR%..\build-windows-agent.ps1"
+) else if exist "%SCRIPT_DIR%scripts\build-windows-agent.ps1" (
+    set "PS_SCRIPT=%SCRIPT_DIR%scripts\build-windows-agent.ps1"
+) else (
+    set "PS_SCRIPT=%SCRIPT_DIR%build-windows-agent.ps1"
+)
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build-windows-agent.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
 if %ERRORLEVEL% EQU 0 (
     echo.
     echo ========================================================

@@ -34,7 +34,7 @@ class TestPyprojectPackagingConfig:
 
         project = data.get("project", {})
         assert project.get("name") == "bridge-local"
-        assert project.get("version") == "0.1.0"
+        assert project.get("version") == "0.3.0"
 
         # Проверка точек входа console_scripts
         scripts = project.get("scripts", {})

@@ -16,11 +16,13 @@ import json
 import logging
 import struct
 import time
-from typing import Any
+from typing import Any, cast
 
 from bridge_core.models import (
     FRAME_HEADER_SIZE,
     FRAME_MAGIC,
+    FRAME_MAGIC_ENCRYPTED,
+    FRAME_MAGIC_PLAIN,
     MAX_PAYLOAD_SIZE,
     JsonRpcErrorResponse,
     JsonRpcRequest,
@@ -89,27 +91,33 @@ def encode_frame(payload: bytes | str) -> bytes:
 
 async def read_frame(
     reader: asyncio.StreamReader,
+    cipher: Any = None,
     max_payload_size: int = MAX_PAYLOAD_SIZE,
     dev_logging: bool = True,
+    out_meta: dict[str, Any] | None = None,
 ) -> bytes:
     """
     Асинхронно читает один полный бинарный фрейм из потока StreamReader.
 
-    Гарантирует атомарное считывание заголовка и точного количества байт payload,
-    обрабатывая фрагментацию TCP пакетов.
+    Поддерживает:
+      - Plaintext фреймы 'BR' (FRAME_MAGIC_PLAIN).
+      - AEAD зашифрованные фреймы 'BE' (FRAME_MAGIC_ENCRYPTED) с проверкой целостности и порядка.
 
     Args:
         reader: Асинхронный поток чтения TCP сокета.
+        cipher: Опциональный экземпляр AeadFrameCipher для расшифровки.
         max_payload_size: Максимально допустимый размер payload (байт).
         dev_logging: Включить ли детальную трассировку байтов.
+        out_meta: Опциональный словарь для возврата метаданных (is_encrypted и др.).
 
     Returns:
         Сырые байты полезной нагрузки (payload).
 
     Raises:
         asyncio.IncompleteReadError: При разрыве соединения до завершения чтения.
-        InvalidMagicError: Если первые 2 байта не совпадают с FRAME_MAGIC.
+        InvalidMagicError: Если первые 2 байта не совпадают с 'BR' или 'BE'.
         FrameTooLargeError: Если объявленный размер превышает лимит.
+        ProtocolError: При ошибке шифрования или протокола.
     """
     t0 = time.perf_counter_ns()
 
@@ -118,13 +126,20 @@ async def read_frame(
 
     # Проверка магических байтов
     magic = header[:2]
-    if magic != FRAME_MAGIC:
+    is_encrypted = magic == FRAME_MAGIC_ENCRYPTED
+    if out_meta is not None:
+        out_meta["is_encrypted"] = is_encrypted
+
+    if not is_encrypted and magic != FRAME_MAGIC_PLAIN:
         logger.error(
-            "Неверные магические байты фрейма: %s (ожидалось %s)",
+            "Неверные магические байты фрейма: %s (ожидалось %s или %s)",
             magic.hex(),
-            FRAME_MAGIC.hex(),
+            FRAME_MAGIC_PLAIN.hex(),
+            FRAME_MAGIC_ENCRYPTED.hex(),
         )
-        raise InvalidMagicError(f"Неверный MAGIC: {magic!r}, ожидался {FRAME_MAGIC!r}")
+        raise InvalidMagicError(
+            f"Неверный MAGIC: {magic!r}, ожидался {FRAME_MAGIC_PLAIN!r} или {FRAME_MAGIC_ENCRYPTED!r}"
+        )
 
     # Распаковываем длину payload
     (payload_len,) = struct.unpack("!I", header[2:6])
@@ -138,44 +153,59 @@ async def read_frame(
         raise FrameTooLargeError(f"Payload {payload_len} байт превышает лимит {max_payload_size}")
 
     # 2. Читаем ровно payload_len байт данных
-    payload = await reader.readexactly(payload_len)
+    raw_body = await reader.readexactly(payload_len)
+
+    # 3. Декодируем: если фрейм зашифрован 'BE' — расшифровываем через AEAD
+    if is_encrypted:
+        if cipher is None:
+            raise ProtocolError(
+                "Получен зашифрованный фрейм 'BE', но шифрование на узле не активировано (отсутствует PSK токен)"
+            )
+        payload = cipher.decrypt_frame(header, raw_body)
+    else:
+        payload = raw_body
 
     if dev_logging and logger.isEnabledFor(logging.DEBUG):
         elapsed_us = (time.perf_counter_ns() - t0) // 1000
         logger.debug(
-            "[DEV-TRACE-FRAME] Считан фрейм: payload_len=%d b, elapsed=%d µs, preview=%.64r",
-            payload_len,
+            "[DEV-TRACE-FRAME] Считан %s фрейм: payload_len=%d b, elapsed=%d µs, preview=%.64r",
+            "AEAD-ENCRYPTED" if is_encrypted else "PLAINTEXT",
+            len(payload),
             elapsed_us,
             payload[:64],
         )
 
-    return payload
+    return cast(bytes, payload)
 
 
 async def write_frame(
     writer: asyncio.StreamWriter,
     payload: bytes | str,
+    cipher: Any = None,
     dev_logging: bool = True,
 ) -> None:
     """
     Кодирует и асинхронно записывает фрейм в поток StreamWriter с последующим drain().
+    При наличии cipher упаковывает payload в AEAD-фрейм 'BE', иначе в plaintext 'BR'.
 
     Args:
         writer: Асинхронный поток записи TCP сокета.
         payload: Строка или байты данных.
+        cipher: Опциональный экземпляр AeadFrameCipher для шифрования.
         dev_logging: Трассировка времени и размера отправки.
     """
     t0 = time.perf_counter_ns()
-    frame = encode_frame(payload)
+    frame = cipher.encrypt_frame(payload) if cipher is not None else encode_frame(payload)
+
     writer.write(frame)
     await writer.drain()
 
     if dev_logging and logger.isEnabledFor(logging.DEBUG):
         elapsed_us = (time.perf_counter_ns() - t0) // 1000
         logger.debug(
-            "[DEV-TRACE-FRAME] Отправлен фрейм: total_size=%d b (payload=%d b), elapsed=%d µs",
+            "[DEV-TRACE-FRAME] Отправлен %s фрейм: total_size=%d b, elapsed=%d µs",
+            "AEAD-ENCRYPTED" if cipher is not None else "PLAINTEXT",
             len(frame),
-            len(frame) - FRAME_HEADER_SIZE,
             elapsed_us,
         )
 

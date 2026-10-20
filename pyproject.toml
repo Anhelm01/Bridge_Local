@@ -1,6 +1,6 @@
 [project]
 name = "bridge-local"
-version = "0.1.0"
+version = "0.3.0"
 description = "Cross-platform Linux-to-Windows remote management & file sync over LAN"
 readme = "README.md"
 authors = [
@@ -14,6 +14,7 @@ dependencies = [
     "rich>=13.0.0",
     "psutil>=5.9.0",
     "pywin32>=306; sys_platform == 'win32'",
+    "cryptography>=50.0.2",
 ]
 
 [project.optional-dependencies]
@@ -54,10 +55,12 @@ members = []
 [tool.ruff]
 target-version = "py314"
 line-length = 100
+src = ["src", "tests"]
+exclude = ["ref", ".git", ".venv", ".pytest_cache"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003", "B008"]  # Allow Cyrillic and Typer argument defaults
+ignore = ["RUF001", "RUF002", "RUF003", "B008", "E501"]  # Allow Cyrillic, Typer defaults, and long docstrings
 
 [tool.ruff.format]
 quote-style = "double"
@@ -83,9 +86,6 @@ module = [
 ]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = "bridge_client_linux.tui.app"
-disable_error_code = ["attr-defined"]
 
 # --- Pytest Configuration ---
 [tool.pytest.ini_options]

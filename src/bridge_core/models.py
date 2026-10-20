@@ -412,6 +412,75 @@ class PocketOffsetResult(BaseModel):
     )
 
 
+class PocketClearResult(BaseModel):
+    """Результат очистки кармана (pocket.clear)."""
+
+    status: str = Field(default="success", description="Статус операции")
+    deleted_count: int = Field(ge=0, description="Количество удалённых файлов")
+    freed_bytes: int = Field(ge=0, description="Суммарный освобождённый объём в байтах")
+
+
+# ---------------------------------------------------------------------------
+# Удалённый просмотр и поиск файлов (FS List / Find)
+# ---------------------------------------------------------------------------
+
+
+class FsListParams(BaseModel):
+    """Параметры удалённого просмотра каталога (fs.list)."""
+
+    path: str | None = Field(
+        default=None,
+        description="Путь к каталогу (если None — рабочий каталог или карман)",
+    )
+    pocket_only: bool = Field(default=False, description="Просмотреть каталог кармана")
+    recursive: bool = Field(default=False, description="Рекурсивный обход каталога")
+    max_items: int = Field(
+        default=500, le=5000, description="Максимальное число возвращаемых записей"
+    )
+
+
+class FsEntry(BaseModel):
+    """Информация об элементе удалённой файловой системы."""
+
+    name: str = Field(description="Имя файла или папки")
+    path: str = Field(description="Полный путь на удалённой машине")
+    is_dir: bool = Field(description="Флаг: является ли каталогом")
+    size_bytes: int = Field(default=0, ge=0, description="Размер в байтах")
+    modified_iso: str = Field(description="Дата и время модификации ISO-8601")
+    extension: str = Field(default="", description="Расширение файла")
+
+
+class FsListResult(BaseModel):
+    """Результат выполнения fs.list."""
+
+    target_path: str = Field(description="Просмотренный путь")
+    total_entries: int = Field(ge=0, description="Общее число записей")
+    entries: list[FsEntry] = Field(default_factory=list, description="Список элементов каталога")
+
+
+class FsFindParams(BaseModel):
+    """Параметры удалённого поиска файлов (fs.find)."""
+
+    pattern: str = Field(
+        min_length=1, description="Маска поиска или подстрока (например *.txt, build*, report)"
+    )
+    directory: str | None = Field(
+        default=None,
+        description="Корневой каталог поиска (по умолчанию рабочий каталог или карман)",
+    )
+    pocket_only: bool = Field(default=False, description="Искать только в кармане")
+    max_results: int = Field(default=100, le=1000, description="Максимальное число результатов")
+
+
+class FsFindResult(BaseModel):
+    """Результат выполнения fs.find."""
+
+    pattern: str = Field(description="Использованная маска")
+    searched_directory: str = Field(description="Каталог, в котором производился поиск")
+    total_found: int = Field(ge=0, description="Количество найденных совпадений")
+    entries: list[FsEntry] = Field(default_factory=list, description="Найденные файлы")
+
+
 # ---------------------------------------------------------------------------
 # Аудит-лог (JSONL запись в pocket/logs/YYYY-MM-DD.jsonl)
 # ---------------------------------------------------------------------------
@@ -469,14 +538,56 @@ class AuditLogEntry(BaseModel):
 # ---------------------------------------------------------------------------
 
 # Магические байты для идентификации фрейма Bridge Local
-FRAME_MAGIC = b"\x42\x52"  # "BR"
+FRAME_MAGIC_PLAIN = b"\x42\x52"  # "BR"
+FRAME_MAGIC = FRAME_MAGIC_PLAIN
 FRAME_MAGIC_INT = 0x4252
+
+# Зашифрованный AEAD-фрейм (XChaCha20-Poly1305 / AES-256-GCM)
+FRAME_MAGIC_ENCRYPTED = b"\x42\x45"  # "BE" (Bridge Encrypted)
+FRAME_MAGIC_ENCRYPTED_INT = 0x4245
+
+AEAD_NONCE_SIZE = 12
+AEAD_TAG_SIZE = 16
+AEAD_SEQ_SIZE = 8
+AEAD_OVERHEAD_SIZE = AEAD_SEQ_SIZE + AEAD_NONCE_SIZE + AEAD_TAG_SIZE  # 36 байт
 
 # Максимальный размер payload (64 МБ по умолчанию)
 MAX_PAYLOAD_SIZE = 64 * 1024 * 1024
 
 # Длина заголовка фрейма: MAGIC (2) + LEN (4) = 6 байт
 FRAME_HEADER_SIZE = 6
+
+
+# ---------------------------------------------------------------------------
+# Модели событий кармана (Event-Driven Real-Time Sync)
+# ---------------------------------------------------------------------------
+
+
+class PocketEventsParams(BaseModel):
+    """Параметры для ожидания событий изменения файлов в кармане."""
+
+    last_event_id: int = Field(
+        default=0,
+        ge=0,
+        description="Идентификатор последнего полученного события",
+    )
+    timeout_sec: float = Field(
+        default=30.0,
+        gt=0,
+        le=120.0,
+        description="Таймаут ожидания прерывания файловой системы (секунды)",
+    )
+
+
+class PocketEventsResult(BaseModel):
+    """Результат ожидания событий кармана."""
+
+    event_id: int = Field(description="Текущий идентификатор версии кармана")
+    changed_files: list[str] = Field(
+        default_factory=list,
+        description="Относительные пути изменившихся файлов",
+    )
+    has_changes: bool = Field(description="Были ли изменения за период ожидания")
 
 
 # ---------------------------------------------------------------------------
@@ -496,3 +607,7 @@ class RpcMethod:
     POCKET_PULL = "pocket.pull"
     POCKET_PUSH = "pocket.push"
     POCKET_OFFSET = "pocket.offset"
+    POCKET_CLEAR = "pocket.clear"
+    POCKET_EVENTS = "pocket.events"
+    FS_LIST = "fs.list"
+    FS_FIND = "fs.find"

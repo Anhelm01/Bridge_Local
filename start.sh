@@ -269,7 +269,7 @@ WRAPPER_EOF
     fi
 
     echo ""
-    read -rp "Открыть TUI Дашборд прямо сейчас? [Y/n]: " LAUNCH_TUI
+    read -rp "Открыть Mini HUD прямо сейчас? [Y/n]: " LAUNCH_TUI
     LAUNCH_TUI="${LAUNCH_TUI:-y}"
     if [[ "$LAUNCH_TUI" =~ ^[YyДд]$ ]]; then
         run_bridge tui
@@ -663,7 +663,7 @@ while true; do
     echo -e "       ${C_GRAY}--> Интерактивная смена цели, создание wrapper, PATH, конфига и запуск${C_RESET}\n"
     echo -e "   ${C_BOLD}[2]${C_RESET} Сменить целевое устройство / сеть ${C_CYAN}(IP, Порт, Токен)${C_RESET}"
     echo -e "   ${C_BOLD}[3]${C_RESET} Настроить глобальный доступ по умолчанию ${C_GRAY}(~/.local/bin/bridge-cli)${C_RESET}"
-    echo -e "   ${C_BOLD}[4]${C_RESET} Запустить оперативный ${C_MAGENTA}TUI Дашборд${C_RESET} (F1-F8)"
+    echo -e "   ${C_BOLD}[4]${C_RESET} Запустить оперативный ${C_MAGENTA}Mini HUD${C_RESET} (Микро-интерфейс)"
     echo -e "   ${C_BOLD}[5]${C_RESET} Диагностика и проверка связи (Ping & Status)"
     echo -e "   ${C_BOLD}[6]${C_RESET} Выполнить команду на Windows ${C_YELLOW}(Remote PowerShell Exec)${C_RESET}"
     echo -e "   ${C_BOLD}[7]${C_RESET} Управление Карманом (Отправка, Скачивание, Синхронизация)"

@@ -8,7 +8,7 @@ Bridge Local — корневой пакет проекта.
   - bridge_client_linux: клиент CLI/TUI для Linux (интерактивный режим + headless agy_cli).
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 
 def main() -> None:

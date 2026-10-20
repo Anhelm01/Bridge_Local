@@ -1,16 +1,6 @@
-﻿<#
+<#
 .SYNOPSIS
-    Сборка автономного исполняемого файла Windows-агента (bridge-agent.exe) с помощью PyInstaller.
-
-.DESCRIPTION
-    Скрипт выполняет:
-      1. Проверку окружения Python и наличия PyInstaller.
-      2. Установку зависимостей проекта и PyInstaller при их отсутствии.
-      3. Сборку bridge-agent.exe согласно спецификации bridge-agent.spec.
-      4. Проверку собранного бинарного файла и расчет контрольной суммы SHA-256.
-
-.PARAMETER Clean
-    Выполнить предварительную очистку каталогов build/ и dist/.
+    Build standalone Windows Agent (bridge-agent.exe) via PyInstaller.
 #>
 
 [CmdletBinding()]
@@ -24,23 +14,20 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = "utf-8"
 
 Write-Host "============================================================"
-Write-Host "  Сборка автономного агента Bridge Local (bridge-agent.exe)"
-
+Write-Host "  Building Standalone Bridge Local Agent (bridge-agent.exe)"
 Write-Host "============================================================"
 
-# Определение корневого каталога репозитория
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
 $specFile = Join-Path $repoRoot "bridge-agent.spec"
 if (-not (Test-Path $specFile)) {
-    Write-Error "[FAIL] Файл спецификации PyInstaller не найден: $specFile"
+    Write-Error "[FAIL] PyInstaller spec file not found: $specFile"
     exit 1
 }
 
-# Очистка артефактов предыдущей сборки
 if ($Clean) {
-    Write-Host "[BUILD] Очистка предыдущих артефактов сборки..."
+    Write-Host "[BUILD] Cleaning previous build artifacts..."
     $buildDir = Join-Path $repoRoot "build"
     $distDir = Join-Path $repoRoot "dist"
     if (Test-Path $buildDir) { Remove-Item -Path $buildDir -Recurse -Force -ErrorAction SilentlyContinue }
@@ -48,33 +35,26 @@ if ($Clean) {
         Remove-Item -Path (Join-Path $distDir "bridge-agent.exe") -Force -ErrorAction SilentlyContinue
     }
 }
-# Проверка и инициализация системных компонентов pywin32
+
 try {
     $postinstallCmd = Get-Command "pywin32_postinstall.py" -ErrorAction SilentlyContinue
     if ($postinstallCmd) {
-        Write-Host "[BUILD] Регистрация системных компонентов pywin32..."
+        Write-Host "[BUILD] Registering pywin32 system components..."
         python $postinstallCmd.Source -install -silent 2>$null
     }
 } catch {}
 
-# Проверка наличия pyinstaller
 $pyinstallerCmd = Get-Command "pyinstaller" -ErrorAction SilentlyContinue
 if (-not $pyinstallerCmd) {
-    Write-Host "[BUILD] PyInstaller не найден в PATH. Попытка запуска через uv / python..."
-    $uvCmd = Get-Command "uv" -ErrorAction SilentlyContinue
-    if ($uvCmd) {
-        Write-Host "[BUILD] Запуск через uv run pyinstaller..."
-        & uv run pyinstaller --clean $specFile
-    } else {
-        Write-Host "[BUILD] Запуск через python -m PyInstaller..."
-        & python -m PyInstaller --clean $specFile
-    }
+    Write-Host "[BUILD] PyInstaller not in PATH. Running via uv run..."
+    & uv run pyinstaller --clean $specFile
 } else {
-    Write-Host "[BUILD] Запуск PyInstaller: pyinstaller --clean $specFile"
+    Write-Host "[BUILD] Running PyInstaller: pyinstaller --clean $specFile"
     & pyinstaller --clean $specFile
 }
 
 $outputExe = Join-Path $repoRoot "dist\bridge-agent.exe"
+$outputTray = Join-Path $repoRoot "dist\bridge-tray.exe"
 if (Test-Path $outputExe) {
     Copy-Item (Join-Path $repoRoot "bridge.toml") -Destination (Join-Path $repoRoot "dist\bridge.toml") -Force -ErrorAction SilentlyContinue
     $fileInfo = Get-Item $outputExe
@@ -82,12 +62,16 @@ if (Test-Path $outputExe) {
     $hash = (Get-FileHash -Path $outputExe -Algorithm SHA256).Hash
 
     Write-Host "============================================================"
-    Write-Host "  [OK] Сборка успешно завершена!"
-    Write-Host "  Бинарник:  $outputExe"
-    Write-Host "  Размер:    $sizeMb MB ($($fileInfo.Length) байт)"
-    Write-Host "  SHA-256:   $hash"
+    Write-Host "  [OK] Build completed successfully!"
+    Write-Host "  Agent (Console):   $outputExe ($sizeMb MB)"
+    Write-Host "  SHA-256:           $hash"
+    if (Test-Path $outputTray) {
+        $trayInfo = Get-Item $outputTray
+        $trayMb = [Math]::Round($trayInfo.Length / 1MB, 2)
+        Write-Host "  Tray (NoConsole):  $outputTray ($trayMb MB)"
+    }
     Write-Host "============================================================"
 } else {
-    Write-Error "[FAIL] Файл bridge-agent.exe не был создан в каталоге dist."
+    Write-Error "[FAIL] File bridge-agent.exe was not created in dist directory."
     exit 1
 }

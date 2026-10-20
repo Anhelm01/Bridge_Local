@@ -1,6 +1,8 @@
-# Bridge Local: Complete CLI & Agent Command Reference
+# Bridge Local: Complete CLI & Agent Command Reference (v0.3.0)
 
 Полный справочник всех команд, параметров, флагов, кодов завершения и форматов вывода утилит **`bridge-cli`** (Linux) и **`bridge-agent`** (Windows).
+
+В версии **v0.3.0** Bridge Local перешел на симметричную P2P архитектуру (**Dual-Role Peer / Universal Node**): каждый узел (как Linux, так и Windows) может одновременно выступать и сервером-демоном (`BridgeService`), и клиентом (`BridgeClient`).
 
 ---
 
@@ -22,8 +24,8 @@ Bridge Local спроектирован с поддержкой двух реж�
 | **`0`** | `SUCCESS` | Команда успешно выполнена. |
 | **`1`** | `GENERAL_ERROR` | Ошибка аргументов, сбой парсинга, ошибка конфигурации или внутреннее исключение. |
 | **`2`** | `NETWORK_ERROR` | Сетевой сбой: хост недоступен, отказ в соединении (`ConnectionRefused`), сброс сокета. |
-| **`3`** | `AUTH_ERROR` | Несовпадение токена PSK (Pre-Shared Key), HMAC верификации или обнаружен replay. |
-| **`4`** | `COMMAND_FAILED` | Удаленный процесс PowerShell завершился с ненулевым кодом выхода. |
+| **`3`** | `AUTH_ERROR` | Несовпадение токена PSK (Pre-Shared Key), AEAD/HMAC верификации или обнаружен replay. |
+| **`4`** | `COMMAND_FAILED` | Удаленный процесс (PowerShell на Windows или Bash на Linux) завершился с ненулевым кодом выхода. |
 | **`5`** | `TIMEOUT` | Превышен лимит времени ожидания выполнения команды или ответа RPC. |
 
 ---
@@ -252,6 +254,14 @@ bridge-cli pocket list [-j]
 bridge-cli pocket path [-j]
 ```
 
+#### `bridge-cli pocket clear`
+Очистка файлов в локальном кармане (удаление накопившегося мусора):
+```bash
+bridge-cli pocket clear [-f, --force] [-j]
+```
+- `-f, --force`: Принудительная очистка без интерактивного запроса подтверждения (обязательно для `--json` и ИИ-агентов).
+- `-j, --json`: Машиночитаемый отчет со списком удаленных файлов и освобожденным объемом.
+
 ---
 
 ### 2.5 Быстрые Заметки (`bridge-cli note ...`)
@@ -312,18 +322,110 @@ bridge-cli config path [-j]
 
 ---
 
-### 2.7 Графические и терминальные интерфейсы
+### 2.7 Терминальный интерфейс (Mini HUD)
 
-#### `bridge-cli tui`
-Запуск интерактивного полноэкранного интерфейса мониторинга и управления (Rich / Textual-like).
+#### `bridge-cli` / `bridge-cli tui`
+Запуск компактного интерактивного микро-интерфейса Mini HUD (4-5 строк) с Omnibar:
 ```bash
-bridge-cli tui [-m MODE] [--single-pass]
+bridge-cli tui [--single-pass]
 ```
-- `-m, --mode`: Стартовый экран: `DASH`, `POCKET`, `NOTES`, `EXEC`, `CONFIG`, `DEV`.
-- `--single-pass`: Отрисовка одного кадра без бесконечного цикла обновления (удобно для CI/скриптов).
+*(Также запускается вызовом `bridge-cli` без аргументов)*
 
-#### `bridge-cli welcome`
-Отрисовка официального фирменного экрана приветствия BRIDGES Master (Neofetch-стиль).
+- `--single-pass`: Однократная отрисовка кадра без интерактивного цикла (удобно для CI/скриптов).
+
+**Управление через Omnibar (командная строка Mini HUD):**
+- `e <команда>` — выполнение удаленной команды (PowerShell / Bash).
+- `send <файл>` / `drop <файл>` — прямая отправка файла на удаленный узел.
+- `drop -B` — двусторонняя синхронизация кармана (Sync Pocket).
+- `pocket ls` — просмотр содержимого локального кармана.
+- `pocket clear -f` — очистка локального кармана.
+- `note <текст>` — отправка быстрой заметки на удаленный узел.
+- `token [-g|-c]` — просмотр, генерация (`-g`) или копирование (`-c`) PSK токена.
+- `connect <IP:PORT>` — быстрое переключение целевого узла с проверкой пинга.
+- `scan [-a]` — поиск узлов в локальной сети (UDP broadcast 9735). Флаг `-a` — автоподключение к первому найденному.
+- `clear` — очистка вывода последней операции.
+- `q` / `quit` / `exit` / `:q` — выход из Mini HUD.
+
+---
+
+### 2.8 Удаленная файловая навигация (`bridge-cli ls` & `find`)
+
+#### `bridge-cli ls`
+Просмотр содержимого удаленной директории на Windows (или Linux):
+```bash
+bridge-cli ls [ПУТЬ] [-j]
+```
+- `ПУТЬ` (Опционально): Путь к удаленному каталогу (например, `C:\Projects` или `/var/log`). По умолчанию: текущий рабочий каталог удаленного узла.
+- `-j, --json`: Вывод структурированного списка с размерами, атрибутами и временем изменения.
+
+**Пример JSON-вывода (`--json`)**:
+```json
+{
+  "path": "C:\\Projects",
+  "entries": [
+    {"name": "app.py", "type": "file", "size_bytes": 1024, "mtime": 1728130800.0},
+    {"name": "build", "type": "dir", "size_bytes": 0, "mtime": 1728130820.0}
+  ]
+}
+```
+
+#### `bridge-cli find`
+Поиск файлов по шаблону (glob-маске) на удаленном узле:
+```bash
+bridge-cli find <ШАБЛОН> [ПУТЬ] [-j]
+```
+- `<ШАБЛОН>`: Шаблон поиска (например, `*.log`, `*.exe`, `report_*.pdf`).
+- `[ПУТЬ]` (Опционально): Корневой каталог для поиска.
+- `-j, --json`: Машиночитаемый список найденных файлов.
+
+---
+
+### 2.9 Утилиты токенов (`bridge-cli token ...`)
+
+#### `bridge-cli token generate`
+Генерация криптографически стойкого PSK-токена (hex-строка):
+```bash
+bridge-cli token generate [-b BYTES] [-j]
+```
+- `-b, --bytes INTEGER`: Количество случайных байт (по умолчанию: `32` -> 64 hex-символа).
+
+#### `bridge-cli token verify`
+Проверка корректности формата токена и его энтропии:
+```bash
+bridge-cli token verify <ТОКЕН> [-j]
+```
+
+---
+
+### 2.10 Управление фоновой службой демона (`bridge-cli service ...`)
+
+В версии **v0.3.0** Linux-узел может работать не только клиентом, но и полноценным сервером-демоном (`BridgeService`), принимая команды и файлы от Windows:
+
+#### `bridge-cli service run`
+Запуск демона в текущем терминале (Foreground):
+```bash
+bridge-cli service run [--host HOST] [--port PORT]
+```
+- `--host TEXT`: IP-адрес для прослушивания (по умолчанию: `0.0.0.0` или из `bridge.toml`).
+- `--port INTEGER`: TCP-порт для прослушивания (по умолчанию: `9732`).
+
+#### `bridge-cli service start`
+Запуск демона в изолированном фоновом процессе (Detached background daemon).
+
+#### `bridge-cli service stop`
+Остановка работающего фонового демона.
+
+#### `bridge-cli service status`
+Проверка текущего статуса демона (PID, порт, активность сокета). Поддерживает `--json`.
+
+#### `bridge-cli service install-systemd`
+Автоматическая генерация и регистрация службы пользователя `systemd --user` (`bridge-service.service`) для автозапуска при загрузке системы:
+```bash
+bridge-cli service install-systemd
+```
+
+#### `bridge-cli service uninstall-systemd`
+Остановка, отключение и удаление пользовательской службы systemd.
 
 ---
 
@@ -338,14 +440,23 @@ bridge-agent.exe [КОМАНДА] [ПАРАМЕТРЫ...]
 - Если запущен Windows SCM (Service Control Manager) — запускается как системная фоновая служба.
 - Если запущен вручную (двойной клик в Проводнике или вызов из `cmd.exe`) — стартует консольный агент.
 
-### 3.1 Основные команды агента
+### 3.1 Серверные команды демона Windows
 
 #### `bridge-agent.exe run`
-Запуск демона службы агента в текущем консольном окне.
+Запуск демона службы агента в текущем консольном окне (Interactive Foreground).
 - Слушает на порту (по умолчанию `9732` на `0.0.0.0`).
 - Запускает Watchdog мониторинга локального кармана.
-- Обрабатывает входящие RPC-запросы от Linux (`ping`, `exec`, `pocket`, `notes`).
+- Обрабатывает входящие RPC-запросы от Linux (`ping`, `exec`, `pocket`, `notes`, `ls`, `find`).
 - Прерывание: `Ctrl+C`.
+
+#### `bridge-agent.exe start`
+Запуск фонового демона в полностью отвязанном фоновом процессе (Detached background process без привязки к окну консоли).
+
+#### `bridge-agent.exe stop`
+Остановка работающего фонового процесса демона.
+
+#### `bridge-agent.exe status`
+Отображение сводного статуса демона: активность фонового процесса, статус службы SCM, состояние TCP-порта 9732 и количество файлов в кармане. Поддерживает `--json`.
 
 #### `bridge-agent.exe setup`
 Интерактивный мастер первоначальной конфигурации в Windows-консоли:
@@ -388,6 +499,54 @@ bridge-agent.exe drop --clipboard
 - `install-context-menu`: Добавление пункта **«Отправить в Bridge Pocket»** в контекстное меню Проводника Windows (Explorer) при правом клике на любых файлах и папках.
 - `uninstall-context-menu`: Удаление пункта меню из системного реестра.
 - `generate-reg [file.reg]`: Генерация `.reg` файла для импорта настроек реестра администратором вручную.
+
+---
+
+### 3.2 Клиентские команды Windows-узла (Dual-Role Peer / Symmetric Client)
+
+В версии **v0.3.0** `bridge-agent.exe` умеет выступать полноценным клиентом, управляя удаленным узлом Linux (или другим Windows-ПК):
+
+#### `bridge-agent.exe ping`
+Heartbeat-проверка доступности удаленного Linux-узла:
+```cmd
+bridge-agent.exe ping [--host HOST] [--port PORT] [--token TOKEN] [--json]
+```
+
+#### `bridge-agent.exe exec "<КОМАНДА>"`
+Выполнение удаленной команды на узле Linux (Bash-скрипты) или Windows:
+```cmd
+bridge-agent.exe exec "uname -a; df -h" --json
+bridge-agent.exe exec "systemctl --user status my-app" -T 30
+```
+- `<КОМАНДА>`: Командная строка для удаленного выполнения на Linux (выполняется через `BashExecutor`).
+- `-T, --timeout INTEGER`: Таймаут выполнения в секундах (по умолчанию `30`).
+- `--json`, `-j`: Машиночитаемый JSON-ответ.
+
+#### `bridge-agent.exe ls [ПУТЬ]`
+Удаленный просмотр директории на Linux-машине:
+```cmd
+bridge-agent.exe ls /home/user/Projects --json
+```
+
+#### `bridge-agent.exe find <ШАБЛОН> [ПУТЬ]`
+Удаленный поиск файлов по маске на целевом узле:
+```cmd
+bridge-agent.exe find "*.py" /home/user --json
+```
+
+#### `bridge-agent.exe send <ФАЙЛЫ...>`
+Прямая отправка локальных файлов Windows в карман Linux:
+```cmd
+bridge-agent.exe send C:\dist\app.zip --json
+```
+
+#### `bridge-agent.exe note <send|list|read>`
+Отправка и чтение заметок:
+```cmd
+bridge-agent.exe note send "Привет с Windows!" --json
+bridge-agent.exe note list --limit 10 --json
+bridge-agent.exe note read <ID_ЗАМЕТКИ>
+```
 
 ---
 
