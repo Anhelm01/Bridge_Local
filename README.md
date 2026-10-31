@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-378%20passed-00FF66.svg)](tests/)
 [![Type Checked](https://img.shields.io/badge/types-mypy%20strict-7D8590.svg)](src/)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-black.svg)](https://github.com/astral-sh/ruff)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 ---
 
@@ -181,4 +181,11 @@ bridge-cli exec "Get-Process -Name BridgeLocalAgent" --json
 5. [**docs/04_BINARY_GUIDE_LINUX.md**](docs/04_BINARY_GUIDE_LINUX.md) — Руководство по эксплуатации скомпилированного / автономного исполняемого файла `bridge-cli` на Linux: установка в `~/.local/bin`, регламент взаимодействия для AI-агентов (`agy_cli` `--json`), таблица кодов возврата процесса и автозапуск через `systemd`.
 6. [**docs/05_BINARY_GUIDE_WINDOWS.md**](docs/05_BINARY_GUIDE_WINDOWS.md) — Руководство по эксплуатации скомпилированного автономного агента `bridge-agent.exe` на Windows: панель управления `start.bat` (все 13 пунктов), установка службы SCM (`BridgeLocalAgent`), значок в системном трее, интеграция с Проводником и глобальное развертывание в `C:\BridgeLocal`.
 7. [**docs/AGENTS.md**](docs/AGENTS.md) — Регламент взаимодействия и операционный протокол для автономных ИИ-агентов (Antigravity `agy_cli`, Claude Code, Cursor).
+
+---
+
+## 7. Лицензия
+
+Проект лицензирован под условиями [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).  
+Автор: **Кратюк Матвей** (2026).
 
