@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BRIDGE — Install. Connect. Control.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles/main.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- ========================================================================
+       1. HERO SECTION (3D Drawbridge with X-Ray Dual-RGB Fresnel & Refraction)
+       ======================================================================== -->
+  <section class="hero" id="hero">
+    <canvas id="scene" aria-label="Interactive 3D Drawbridge sculpture. Drag to rotate."></canvas>
+
+    <div class="ui">
+      <h1 class="sr-only">BRIDGE — Install, Connect, Control</h1>
+
+      <header class="nav">
+        <a href="#hero" class="logo">
+          <i class="logo-mark"></i>
+          <b>Bridge</b>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#topology">Топология</a></li>
+          <li><a href="#ecosystem">Продукты</a></li>
+          <li><a href="#terminal">Терминал</a></li>
+          <li><a href="#quickstart">Старт</a></li>
+        </ul>
+      </header>
+
+      <div class="hero-bottom">
+        <p class="tagline" id="hero-tagline">
+          Симметричная P2P-связь<br><strong>Без облаков и границ.</strong>
+        </p>
+
+        <div class="cta-row">
+          <a href="#topology" class="cta">Explore Now</a>
+          <span class="cta-line" aria-hidden="true"></span>
+        </div>
+      </div>
+
+      <div class="loader" id="loader">Сборка 3D-оптики</div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       LOWER WORLD WRAPPER (Animated Interactive Backdrop for All Sections Below Hero)
+       ======================================================================== -->
+  <div class="lower-world" id="lower-world">
+    <div class="lower-bg-wrap" aria-hidden="true">
+      <canvas id="lower-bg-canvas"></canvas>
+      <div class="lower-bg-dots"></div>
+    </div>
+    <div class="lower-transition-seam" aria-hidden="true"></div>
+
+    <!-- ======================================================================
+         2. INTERACTIVE DRAGGABLE NETWORK TOPOLOGY
+         ====================================================================== -->
+    <section class="section section-topology" id="topology">
+      <div class="section-header">
+        <span class="section-tag">Архитектура связи • Dual-Role Peer &amp; Hardware Bastion</span>
+        <h2 class="section-title">Единая сеть между Linux, Windows, Raspberry Pi и ИИ-Агентами</h2>
+        <p class="section-subtitle">
+          Выберите сценарий маршрутизации слева и <b>перетаскивайте блоки устройств мышкой или пальцем</b> прямо на схеме — линии связи динамически перестраиваются в реальном времени.
+        </p>
+      </div>
+
+      <div class="topology-grid">
+        <div class="route-list" id="route-list"></div>
+
+        <div class="topology-stage" id="topology-stage">
+          <div class="topology-toolbar">
+            <span class="topology-hint">⇄ Зажмите любой блок и перетащите по полю</span>
+            <button type="button" class="topo-reset-btn" id="topo-reset-btn">Сбросить позиции</button>
+          </div>
+
+          <div class="topology-canvas" id="topology-canvas" aria-label="Интерактивная схема сетевой топологии Bridge">
+            <!-- GPU-light SVG Layer strictly for dynamic curves -->
+            <svg class="topology-links-svg" id="topology-svg" aria-hidden="true">
+              <path id="link-lan" class="topo-link active" />
+              <path id="link-mcp" class="topo-link" />
+              <path id="link-bastion" class="topo-link" />
+              <path id="link-wifi" class="topo-link" />
+              <path id="link-eth-win" class="topo-link" />
+              <path id="link-eth-lin" class="topo-link" />
+            </svg>
+
+            <!-- HTML Draggable Nodes Layer (crisp typography + GPU translate3d) -->
+            <div class="topo-nodes-layer" id="topo-nodes-layer">
+              <div class="topo-node" data-node="ai">
+                <div class="topo-node-title">AI IDE Agent</div>
+                <div class="topo-node-sub">Antigravity • Cursor • Claude</div>
+              </div>
+
+              <div class="topo-node active" data-node="linux">
+                <div class="topo-node-title">Linux Workstation</div>
+                <div class="topo-node-sub is-cyan">bridge-cli • bridge-mcp</div>
+              </div>
+
+              <div class="topo-node" data-node="phone">
+                <div class="topo-node-title">Смартфон / Планшет</div>
+                <div class="topo-node-sub is-pink">Wi-Fi Captive Portal</div>
+              </div>
+
+              <div class="topo-node" data-node="rpi">
+                <div class="topo-node-title">Raspberry Pi 3B</div>
+                <div class="topo-node-sub is-pink">wlan0: 192.168.4.1 (AP)</div>
+                <div class="topo-node-sub is-aqua">eth0: 192.168.10.1 (DHCP)</div>
+              </div>
+
+              <div class="topo-node active" data-node="windows">
+                <div class="topo-node-title">Windows 10/11 Rig</div>
+                <div class="topo-node-sub is-cyan">BridgeLocalAgent (:9732)</div>
+                <div class="topo-node-sub is-aqua">OpenSSH + Addon wh.*</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="topology-info">
+            <p class="topology-desc" id="topology-desc"></p>
+            <span class="topology-packet" id="topology-packet"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  <!-- ========================================================================
+       3. ECOSYSTEM PRODUCTS BENTO GRID (4 Core Products)
+       ======================================================================== -->
+  <section class="section" id="ecosystem">
+    <div class="section-header">
+      <span class="section-tag">Ключевые модули экосистемы • 4 основных продукта</span>
+      <h2 class="section-title">Архитектура семейства Bridge</h2>
+      <p class="section-subtitle">
+        Четыре взаимосвязанных инструмента: от прямого шифрованного P2P-канала и аппаратного микро-шлюза на Raspberry Pi до протокола управления для ИИ-агентов и системы ревизии Windows.
+      </p>
+    </div>
+
+    <div class="bento-grid" id="ecosystem-grid"></div>
+  </section>
+
+  <!-- ========================================================================
+       4. LIVE TERMINAL SIMULATOR (Mini HUD vs AI Operator --json)
+       ======================================================================== -->
+  <section class="section" id="terminal">
+    <div class="section-header">
+      <span class="section-tag">Двойной операторский интерфейс • TUI &amp; Headless JSON</span>
+      <h2 class="section-title">Интерактивный симулятор <code>bridge-cli tui</code> и <code>--json</code></h2>
+      <p class="section-subtitle">
+        В <b>Bridge Local</b> и <b>Bridge WH</b> каждая команда работает в двух режимах: компактный 4-строчный <b>Mini HUD</b> без мерцания для человека и детерминированный <b><code>--json</code></b> со строгими кодами возврата (<code>0..5</code>) для ИИ-агентов.
+      </p>
+    </div>
+
+    <div class="terminal-shell">
+      <div class="terminal-topbar">
+        <div class="terminal-dots">
+          <span></span><span></span><span></span>
+          <strong style="margin-left: 8px; font-size: 13px;">bridge-cli — Omnibar &amp; RPC Inspector</strong>
+        </div>
+
+        <div class="terminal-presets">
+          <button type="button" class="term-preset-btn active" data-term-cmd="ping">ping</button>
+          <button type="button" class="term-preset-btn" data-term-cmd="exec">exec PowerShell</button>
+          <button type="button" class="term-preset-btn" data-term-cmd="pocket">pocket status</button>
+          <button type="button" class="term-preset-btn" data-term-cmd="wh">call wh.diagnostics</button>
+          <button type="button" class="term-preset-btn" data-term-cmd="doctor">doctor</button>
+        </div>
+
+        <button type="button" class="term-mode-toggle" id="term-mode-btn">
+          Режим: Human Mini HUD (TUI)
+        </button>
+      </div>
+
+      <pre class="terminal-screen" id="term-screen"></pre>
+
+      <form class="terminal-omnibar" id="term-form">
+        <span class="terminal-prompt">bridge&gt;</span>
+        <input
+          type="text"
+          id="term-input"
+          class="terminal-input"
+          placeholder="Введите команду (например: ping, pocket status, call wh.diagnostics, doctor)..."
+          autocomplete="off"
+        />
+        <button type="submit" class="terminal-run-btn">Выполнить ↵</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       5. QUICK START & DEPLOYMENT CONFIGURATOR
+       ======================================================================== -->
+  <section class="section" id="quickstart">
+    <div class="section-header">
+      <span class="section-tag">Развёртывание за 30 секунд • Zero-Cloud Setup</span>
+      <h2 class="section-title">Быстрый старт на любой платформе</h2>
+      <p class="section-subtitle">
+        Готовые команды для запуска <b>Bridge Local</b> на Linux и Windows, установки <b>Bridge Macro</b> на Raspberry Pi 3B и подключения <b>Bridge MCP</b> к Google Antigravity или Cursor.
+      </p>
+    </div>
+
+    <div class="qs-tabs" id="qs-tabs"></div>
+
+    <div class="qs-panel">
+      <div class="qs-panel-head">
+        <p class="qs-desc" id="qs-desc"></p>
+        <button type="button" class="copy-btn" id="qs-copy-btn">Скопировать код</button>
+      </div>
+      <pre class="qs-code" id="qs-code"></pre>
+    </div>
+  </section>
+
+    <footer class="footer">
+      <div>
+        <b>BRIDGE ECOSYSTEM</b> • Bridge Local • Bridge Macro • Bridge MCP • Bridge WH
+      </div>
+      <div>
+        3-Pass WebGL Optical Refraction Engine • AGPLv3 / MIT • 2026
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

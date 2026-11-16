@@ -1,0 +1,996 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #000000;
+  --bg-elevated: #07090e;
+  --card-bg: rgba(14, 18, 26, 0.74);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --fg: #ffffff;
+  --muted: rgba(255, 255, 255, 0.64);
+  --accent: #a855f7;
+  --pad-x: clamp(16px, 3.2vw, 56px);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+body {
+  width: 100%;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  overflow-x: clip;
+}
+
+/* ==========================================================================
+   1. HERO SECTION
+   ========================================================================== */
+.hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 540px;
+  overflow: hidden;
+  background: #000;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+#scene.dragging {
+  cursor: grabbing;
+}
+
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ui a,
+.ui button,
+.ui .interactive {
+  pointer-events: auto;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.nav {
+  position: absolute;
+  top: clamp(18px, 3.8vh, 38px);
+  left: var(--pad-x);
+  right: var(--pad-x);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 20px;
+  height: 40px;
+  background: #fff;
+  border-radius: 0 20px 20px 0;
+}
+
+.logo b {
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px clamp(16px, 3.2vw, 48px);
+  list-style: none;
+}
+
+.nav-links a {
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  position: relative;
+  cursor: pointer;
+  opacity: 0.88;
+  transition: opacity 0.25s;
+  white-space: nowrap;
+}
+
+.nav-links a:hover {
+  opacity: 1;
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1.5px;
+  background: #00f5d4;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.35s ease;
+}
+
+.nav-links a:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Unified Bottom Hero Row (Never overlaps tagline with CTA on any viewport) */
+.hero-bottom {
+  position: absolute;
+  left: var(--pad-x);
+  right: var(--pad-x);
+  bottom: clamp(24px, 5.5vh, 64px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: clamp(18px, 4vw, 48px);
+}
+
+.tagline {
+  font-size: clamp(22px, 2.5vw, 42px);
+  line-height: 1.2;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.tagline strong {
+  font-weight: 700;
+  display: block;
+  color: #fff;
+}
+
+.cta-row {
+  flex: 1;
+  max-width: 48%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 6px;
+}
+
+.cta {
+  flex: none;
+  padding: 0 20px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+
+.cta:hover {
+  background: #fff;
+  color: #000;
+}
+
+.cta-line {
+  flex: 1;
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.15));
+  min-width: 32px;
+}
+
+.loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  transition: opacity 0.6s;
+}
+
+.loader.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   2. SEAMLESS ATMOSPHERE TRANSITION & ANIMATED LOWER WORLD BACKDROP
+   ========================================================================== */
+.lower-world {
+  position: relative;
+  isolation: isolate;
+  background: #000000;
+}
+
+.lower-bg-wrap {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  margin-bottom: -100vh;
+  margin-bottom: -100lvh;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  /* Soft fade-in from pure #000 at the top edge so there is zero hard seam */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.55) 110px, #000000 240px);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.55) 110px, #000000 240px);
+}
+
+#lower-bg-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Static CSS dot matrix (zero per-frame canvas CPU overhead!) */
+.lower-bg-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Luminous atmospheric horizon glow bridging #hero (#000) into #topology */
+.lower-transition-seam {
+  position: relative;
+  width: 100%;
+  height: clamp(72px, 11vh, 130px);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 68% 95% at 50% 100%,
+    rgba(168, 85, 247, 0.16) 0%,
+    rgba(0, 245, 212, 0.08) 42%,
+    rgba(0, 0, 0, 0) 75%
+  );
+}
+
+.lower-transition-seam::after {
+  content: '';
+  position: absolute;
+  left: var(--pad-x);
+  right: var(--pad-x);
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(168, 85, 247, 0.5) 35%,
+    rgba(0, 245, 212, 0.5) 65%,
+    transparent 100%
+  );
+  opacity: 0.65;
+}
+
+.section {
+  padding: clamp(56px, 8.5vh, 110px) var(--pad-x);
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.section-topology {
+  padding-top: clamp(44px, 6.5vh, 84px);
+}
+
+.section-header {
+  max-width: 780px;
+  margin-bottom: clamp(32px, 5vh, 56px);
+}
+
+.section-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00f5d4;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: clamp(24px, 3.3vw, 46px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-bottom: 14px;
+  overflow-wrap: break-word;
+}
+
+.section-subtitle {
+  font-size: clamp(14px, 1.15vw, 17px);
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+/* ==========================================================================
+   3. INTERACTIVE TOPOLOGY MAP (Zero-Lag GPU Draggable HTML Nodes + SVG Links)
+   ========================================================================== */
+.topology-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.route-btn {
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border);
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.route-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.route-btn.active {
+  background: rgba(168, 85, 247, 0.11);
+  border-color: var(--route-accent, var(--accent));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.route-btn-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.route-btn-proto {
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.topology-stage {
+  background: radial-gradient(circle at 50% 45%, rgba(168, 85, 247, 0.08), rgba(7, 9, 14, 0.92) 72%);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.topology-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.topology-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.topo-reset-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.topo-reset-btn:hover {
+  background: #fff;
+  color: #000;
+}
+
+.topology-canvas {
+  position: relative;
+  width: 100%;
+  height: 330px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.topology-links-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.topo-link {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 2.2;
+  transition: stroke 0.25s;
+}
+
+.topo-link.active {
+  stroke: var(--topo-accent, #00d2ff);
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+  animation: dashFlow 1.1s linear infinite;
+}
+
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.topo-nodes-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.topo-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 11px 14px;
+  min-width: 148px;
+  max-width: 225px;
+  border-radius: 12px;
+  background: #0c1018;
+  border: 1.8px solid rgba(255, 255, 255, 0.22);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  will-change: transform;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.topo-node:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.topo-node.active {
+  border-color: var(--topo-accent, #00d2ff);
+  border-width: 2px;
+  background: #111826;
+  box-shadow: 0 0 18px rgba(0, 210, 255, 0.26);
+}
+
+.topo-node.dragging {
+  cursor: grabbing;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65), 0 0 22px rgba(0, 245, 212, 0.35);
+}
+
+.topo-node-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+
+.topo-node-sub {
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.68);
+  white-space: nowrap;
+}
+
+.topo-node-sub.is-cyan { color: #00d2ff; }
+.topo-node-sub.is-pink { color: #ff3366; }
+.topo-node-sub.is-aqua { color: #00f5d4; }
+
+.topology-info {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.topology-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.82);
+  max-width: 680px;
+}
+
+.topology-packet {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--accent);
+}
+
+/* ==========================================================================
+   4. ECOSYSTEM BENTO GRID (4 Core Products in 2x2 Layout)
+   ========================================================================== */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.project-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: clamp(20px, 2.5vw, 28px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  min-width: 0;
+}
+
+.project-card:hover {
+  border-color: var(--card-accent, var(--accent));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.project-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.project-index {
+  font-size: 28px;
+  font-weight: 700;
+  color: transparent;
+  -webkit-text-stroke: 1.2px var(--card-accent, #fff);
+  line-height: 1;
+}
+
+.project-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--card-accent, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.project-title {
+  font-size: clamp(19px, 1.8vw, 22px);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.project-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+.project-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.metric-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--muted);
+  display: block;
+}
+
+.metric-value {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  overflow-wrap: break-word;
+}
+
+.project-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.project-features li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+  padding-left: 16px;
+  position: relative;
+}
+
+.project-features li::before {
+  content: '▹';
+  position: absolute;
+  left: 0;
+  color: var(--card-accent, var(--accent));
+}
+
+.project-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.project-repo {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   5. TERMINAL SIMULATOR (Mini HUD & AI JSON)
+   ========================================================================== */
+.terminal-shell {
+  background: #05070b;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+
+.terminal-topbar {
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.terminal-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-dots span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.terminal-dots span:nth-child(1) { background: #ff5f56; }
+.terminal-dots span:nth-child(2) { background: #ffbd2e; }
+.terminal-dots span:nth-child(3) { background: #27c93f; }
+
+.terminal-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.term-preset-btn,
+.term-mode-toggle {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.term-preset-btn.active,
+.term-preset-btn:hover {
+  background: #00f5d4;
+  color: #000;
+  border-color: #00f5d4;
+  font-weight: 600;
+}
+
+.term-mode-toggle.is-json {
+  background: #a855f7;
+  color: #fff;
+  border-color: #a855f7;
+  font-weight: 600;
+}
+
+.terminal-screen {
+  padding: clamp(14px, 2.5vw, 24px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(10.5px, 1.3vw, 13.5px);
+  line-height: 1.65;
+  color: #00f5d4;
+  white-space: pre;
+  min-height: 200px;
+  overflow-x: auto;
+}
+
+.terminal-screen.is-json {
+  color: #e879f9;
+}
+
+.terminal-omnibar {
+  display: flex;
+  align-items: center;
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 10px;
+}
+
+.terminal-prompt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  color: #00f5d4;
+}
+
+.terminal-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  outline: none;
+}
+
+.terminal-run-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   6. QUICKSTART TABS & FOOTER
+   ========================================================================== */
+.qs-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.qs-tab-btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.qs-tab-btn.active {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+}
+
+.qs-panel {
+  background: #06080d;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: clamp(16px, 2.5vw, 24px);
+}
+
+.qs-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.qs-desc {
+  font-size: 14px;
+  color: var(--muted);
+  flex: 1;
+  min-width: 220px;
+}
+
+.copy-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  background: #fff;
+  color: #000;
+}
+
+.qs-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(11px, 1.3vw, 13.5px);
+  line-height: 1.65;
+  color: #d1d5db;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.footer {
+  padding: 36px var(--pad-x);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   7. RESPONSIVE BREAKPOINTS (Tablet & Mobile)
+   ========================================================================== */
+@media (max-width: 1080px) {
+  .topology-grid {
+    grid-template-columns: 1fr;
+  }
+  .route-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    bottom: 24px;
+  }
+  .cta-row {
+    width: 100%;
+    max-width: none;
+    padding-bottom: 0;
+  }
+  .topology-stage {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .logo {
+    font-size: 14px;
+  }
+  .logo-mark {
+    width: 16px;
+    height: 32px;
+  }
+  .nav-links {
+    gap: 8px 14px;
+  }
+  .nav-links a {
+    font-size: 12.5px;
+  }
+  .route-list {
+    grid-template-columns: 1fr;
+  }
+  .topology-canvas {
+    height: 480px;
+  }
+  .topo-node {
+    padding: 8px 11px;
+    min-width: 118px;
+    max-width: 56%;
+  }
+  .topo-node-title {
+    font-size: 11.5px;
+  }
+  .topo-node-sub {
+    font-size: 10px;
+    white-space: normal;
+  }
+  .project-metrics {
+    grid-template-columns: 1fr;
+  }
+}
